@@ -1,0 +1,48 @@
+name:                haskell-tiger
+version:             0.1.0.0
+synopsis:            Haskell implementation of the Tiger language
+description:         Please see README.md
+homepage:            https://github.com/themattchan/haskell-tiger#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Matthew Chan
+maintainer:          matt@parametri.city
+copyright:           2016 Matthew Chan
+category:            Language
+build-type:          Simple
+cabal-version:       >=1.10
+
+extra-source-files:  src/Language/Tiger/Lexer.x
+                   , src/Language/Tiger/Parser.y
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Lib
+                     , Language.Tiger.Types
+  other-modules:       Language.Tiger.Lexer
+                     , Language.Tiger.Parser
+  build-tools:         alex
+                     , happy
+  build-depends:       base >= 4.7 && < 5
+  default-language:    Haskell2010
+
+executable haskell-tiger-exe
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , haskell-tiger
+  default-language:    Haskell2010
+
+test-suite haskell-tiger-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , haskell-tiger
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/githubuser/haskell-tiger
