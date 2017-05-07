@@ -117,9 +117,6 @@ tiger :-
   "|"         { mkL Or        }
   ":="        { mkL Assign    }
 
-  $digit+     { mkT (Int . read) }
+  $digit+     { mkT (IntLit . read) }
   $alpha [$alpha $digit \_]* [\']*     { mkT Ident }
-
-  -- let                   { \s -> Let }
-  -- in                    { \s -> In  }
-  -- [\=\+\-\*\/\(\)]      { \s -> Sym (head s) }
+  [\"][^\"]*[\"] { mkT StringLit }
