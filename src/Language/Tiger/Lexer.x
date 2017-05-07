@@ -68,8 +68,8 @@ $lower = a-z
 $upper = A-Z
 $int = [$digit]+
 $alpha = [$lower $upper]       -- alphabetic characters
-$ident = [$alpha][_$alpha$digit]*
-
+$ident = $alpha [$alpha $digit \_]* [\']*
+$stringlit = [\"][^\"]*[\"]
 
 tiger :-
   $white+               ;
@@ -118,5 +118,5 @@ tiger :-
   ":="        { mkL Assign    }
 
   $digit+     { mkT (IntLit . read) }
-  $alpha [$alpha $digit \_]* [\']*     { mkT Ident }
-  [\"][^\"]*[\"] { mkT StringLit }
+  $ident      { mkT Ident     }
+  $stringlit  { mkT StringLit }
