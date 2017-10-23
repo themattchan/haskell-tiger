@@ -4,6 +4,13 @@ module Language.Tiger.Temp where
 import Language.Tiger.Gensym
 import qualified Language.Tiger.Types as Types (Symbol(..))
 
+type Temp = Int
+
+newTemp :: Gensym m => m Temp
+newTemp = gensym
+
+makeString :: Temp -> String
+makeString i = "t" ++ show i
 
 type Label = Types.Symbol
 

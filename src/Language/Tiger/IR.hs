@@ -1,6 +1,7 @@
 -- Chapter 7: Translation to Intermediate Code
 
 module Language.Tiger.IR where
+import Data.List
 import qualified Language.Tiger.Temp as Temp
 
 data Exp
@@ -19,6 +20,9 @@ data Stm
   | CJump Relop Exp Exp Temp.Label Temp.Label
   | Seq Stm Stm
   | Label Temp.Label
+
+seq :: [Stm] -> Stm
+seq = foldr1 Seq
 
 data Binop
   = Plus | Minus | Mul | Div
