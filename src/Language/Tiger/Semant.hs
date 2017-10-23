@@ -3,6 +3,8 @@
 -- | Type checking and translation to intermediate code
 module Language.Tiger.Semant where
 
+import Data.List
+
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Class
@@ -15,7 +17,6 @@ import qualified Language.Tiger.Symtab as Symtab
 
 data VEnvTy = VarTy Ty
             | FunTy [Ty] Ty
-
 
 venv0 :: Symtab.Symtab VEnvTy
 venv0 = fromList
@@ -32,21 +33,38 @@ venv0 = fromList
   ]
 
 tenv0 :: Symtab.Symtab Ty
-tenv0 = fromList [ ("int", IntTy)
-                 , ("string", StringTy)
-                 ]
+tenv0 = fromList
+  [ ("int", IntTy)
+  , ("string", StringTy)
+  ]
 
-data TransError = TypeMismatch | TypeUndefined
+data TransError = TypeMismatch | TypeUndefined | NoHOF | UnboundVariable
+                | NoSuchField
 
 
 transVar :: MonadError TransError m
-         => Symtab.Symtab Env -> Symtab.Symtab Ty
+         => Symtab.Symtab VEnvTy -> Symtab.Symtab (Ty ())
          -> Var a -> m (Exp (Ty (), a))
 transVar venv tenv var = case var of
-  SimpleVar symbol _ -> undefined
-  FieldVar var1 symbol _ -> undefined
-  SubscriptVar var1 exp1 _ -> undefined
+  SimpleVar varName a
+    -> case Symtab.lookup venv varName of
+         Just (VarTy ty) -> pure (Var var (ty, a))
+         Just _ -> throwError NoHOF
+         Nothing -> throwError UnboundVariable
 
+  FieldVar recVar fieldName a
+    -> do
+      Var _ (ty, _)  <- transVar venv tenv recVar
+      case ty of
+        RecordTy fields _ _ -> case lookup fieldName fields of
+          Just fieldTy -> undefined
+          Nothing -> throwError NoSuchField
+        _ -> throwError TypeUndefined
+
+  SubscriptVar var1 exp1 _
+    -> do
+      Var _ (ty, _)  <- transVar venv tenv recVar
+      undefined
 
 annotTy :: Ty () -> Exp a -> m (Exp (Ty (), a))
 annotTy t e = pure $ (t, ) <$> e
@@ -72,7 +90,7 @@ transExp :: MonadError TransError m
          => Symtab.Symtab VEnvTy -> Symtab.Symtab (Ty ())
          -> Exp a -> m (Exp (Ty (), a))
 transExp venv tenv exp = case exp of
-  Var v
+  Var v _
     -> transVar venv tenv v
 
   Nil _
@@ -112,14 +130,19 @@ transExp venv tenv exp = case exp of
 
   Assign v e _
     -> undefined
+
   If c t me _
     -> undefined
+
   While ce be _
     -> undefined
+
   For s b e1 e2 e3 _
     -> undefined
+
   Break _
     -> undefined
+
   Let binds e _
     -> do (venv', tenv') <- foldM (uncurry transDec) (venv,tenv) binds
           ty <- transExp venv' tenv' e
