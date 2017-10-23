@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, TupleSections #-}
+{-# LANGUAGE RecordWildCards, TupleSections, OverloadedStrings #-}
 
 -- | Type checking and translation to intermediate code
 module Language.Tiger.Semant where
@@ -10,18 +10,33 @@ import Control.Monad.State.Lazy
 import Control.Monad.Writer.Lazy
 
 import Language.Tiger.Types
+import Language.Tiger.Gensym
 import qualified Language.Tiger.Symtab as Symtab
 
--- data TransState = TransSt
---   { typeEnv ::
---   , varEnv  :: Symtab Env
---   , uniqSource :: Int
---   }
+data VEnvTy = VarTy Ty
+            | FunTy [Ty] Ty
+
+
+venv0 :: Symtab.Symtab VEnvTy
+venv0 = fromList
+  [ ("print", FunEntry [StringTy] UnitTy)
+  , ("flush", FunEntry [] UnitTy)
+  , ("getchar", FunEntry [] StringTy)
+  , ("ord", FunEntry [StringTy] IntTy)
+  , ("chr", FunEntry [IntTy] StringTy)
+  , ("size", FunEntry [StringTy] IntTy)
+  , ("substring", FunEntry [StringTy, IntTy, IntTy] IntTy)
+  , ("concat", FunEntry [StringTy, StringTy] StringTy)
+  , ("not", FunEntry [IntTy] IntTy)
+  , ("exit", FunEntry [IntTy] UnitTy)
+  ]
+
+tenv0 :: Symtab.Symtab Ty
+tenv0 = fromList [ ("int", IntTy)
+                 , ("string", StringTy)
+                 ]
 
 data TransError = TypeMismatch | TypeUndefined
-
--- type TransMC m = (MonadState TransState m, MonadWriter [TransError] m)
-
 
 
 transVar :: MonadError TransError m
@@ -54,7 +69,7 @@ checkOp op tl tr
     isEq    = any (op ==) [Eq, Neq]
 
 transExp :: MonadError TransError m
-         => Symtab.Symtab Env -> Symtab.Symtab (Ty ())
+         => Symtab.Symtab VEnvTy -> Symtab.Symtab (Ty ())
          -> Exp a -> m (Exp (Ty (), a))
 transExp venv tenv exp = case exp of
   Var v
@@ -69,8 +84,8 @@ transExp venv tenv exp = case exp of
   String s
     -> annotTy StringTy exp
 
-  Call symb args _
-    -> undefined
+  Call funTy args _
+    -> case Symtab.lookup venv
 
   Op l o r _
     -> do
@@ -83,17 +98,11 @@ transExp venv tenv exp = case exp of
     -> case Symtab.lookup tenv recTy of
          Just actualRecTy@(RecordTy fieldTys uid)
            | length fields == length fieldTys ->
-               do { zipWithM checkFieldTy fields fieldTys
+               do { zipWithM checkTy fields fieldTys
                   ; annotTy actualRecTy exp
                   }
          Just _ -> throwError TypeMismatch
          Nothing -> throwError TypeUndefined
-    where
-      checkFieldTy fe fty = do
-        fe' <- goTE fe
-        ty <- getTy fe'
-        guard $ ty == fty
-        return fe'
 
   Seq seqs
     | null seqs
@@ -112,23 +121,39 @@ transExp venv tenv exp = case exp of
   Break _
     -> undefined
   Let binds e _
-    -> undefined
-  Array symb e1 e2 _
-    -> undefined
+    -> do (venv', tenv') <- foldM (uncurry transDec) (venv,tenv) binds
+          ty <- transExp venv' tenv' e
+          annotTy ty exp
 
+  Array arrTy sizeE initE _
+    -> case Symtab.lookup tenv arrTy of
+         Just actualArrTy@(ArrayTy initTy _ _) -> do
+           checkTy sizeE IntTy
+           checkTy initE initTy
+           annotTy actualArrTy exp
+         Just _ -> throwError TypeMismatch
+         Nothing -> throwError TypeUndefined
   where
     goTE = transExp venv tenv
+    checkFieldTy fe fty = do
+      fe' <- goTE fe
+      ty <- getTy fe'
+      guard $ ty == fty
+      return fe'
 
 transDec :: MonadError TransError m
-         => Symtab.Symtab Env -> Symtab.Symtab (Ty a)
-         -> Dec a -> m (Symtab.Symtab Env, Symtab.Symtab (Ty a))
+         => Symtab.Symtab VEnvTy -> Symtab.Symtab (Ty a)
+         -> Dec a -> m (Symtab.Symtab VEnvTy, Symtab.Symtab (Ty a))
 transDec venv tenv dec = case dec of
   FunctionDecl fs
-     -> undefined
+     -> foldM (uncurry goFun) (venv,tenv) fs
   VarDecl{..}
      -> undefined
   TypeDecl ds
      -> undefined
+  where
+    goFun venv tenv Function{..} = undefined
+--      case Symtab.lookup funName venv of
 
 
 transTy :: MonadError TransError m
@@ -141,11 +166,5 @@ transTy tenv ty = case ty of
      -> undefined
   ArrayTy symv uniq _
      -> undefined
-  NilTy
-     -> undefined
-  IntTy
-     -> undefined
-  StringTy
-     -> undefined
-  UnitTy
-     -> undefined
+
+  baseTy -> return baseTy

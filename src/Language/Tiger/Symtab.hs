@@ -9,12 +9,12 @@ module Language.Tiger.Symtab
 
 import qualified Data.HashMap.Strict as HM
 
-import Language.Tiger.Types (Type(..))
+import Language.Tiger.Types (Type(..), Symbol(..))
 
 type Symtab a = HM.HashMap Symbol (Type a)
 
-data Symbol = Sym String Int
-  deriving (Show, Eq)
+-- newtype Symbol = Sym B.ByteString
+--   deriving (Show, Eq)
 
 empty :: Symtab a
 empty = HM.empty

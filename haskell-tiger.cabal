@@ -19,7 +19,9 @@ library
   hs-source-dirs:      src
   exposed-modules:     Language.Tiger
                      , Language.Tiger.Types
+                     , Language.Tiger.Gensym
                      , Language.Tiger.Symtab
+                     , Language.Tiger.Semant
   other-modules:       Language.Tiger.Lexer
                      , Language.Tiger.Parser
   build-tools:         alex

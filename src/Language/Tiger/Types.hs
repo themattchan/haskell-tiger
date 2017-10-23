@@ -10,12 +10,14 @@ import Control.Lens.TH (makeLenses, makePrisms)
 import qualified Data.ByteString.Strict as B
 import Data.Hashable
 import Control.Comonad
---type Symbol = String -> Int     -- hashed string
 
 newtype Symbol = Sym { symbol :: B.ByteString }
   deriving (Show, Eq, Hashable)
 
 makeLenses ''Symbol
+
+instance IsString Symbol where
+  fromString = Sym . B.pack
 
 data Var a
   = SimpleVar Symbol                  a
