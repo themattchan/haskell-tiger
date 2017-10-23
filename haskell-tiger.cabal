@@ -1,7 +1,7 @@
 name:                haskell-tiger
 version:             0.1.0.0
-synopsis:            Haskell implementation of the Tiger language
-description:         Please see README.md
+synopsis:            Tiger compiler from Appel's textbook
+description:         Modern Compiler Implementation in Haskell
 homepage:            https://github.com/themattchan/haskell-tiger#readme
 license:             BSD3
 license-file:        LICENSE
@@ -17,16 +17,26 @@ extra-source-files:  src/Language/Tiger/Lexer.x
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Lib
+  exposed-modules:     Language.Tiger
                      , Language.Tiger.Types
+                     , Language.Tiger.Symtab
   other-modules:       Language.Tiger.Lexer
                      , Language.Tiger.Parser
   build-tools:         alex
                      , happy
   build-depends:       base >= 4.7 && < 5
+                     , containers
+                     , unordered-containers
+                     , transformers
+                     , mtl
+                     , lens
+                     , profunctors
+                     , contravariant
+                     , comonad
+                     , QuickCheck
   default-language:    Haskell2010
 
-executable haskell-tiger-exe
+executable tiger
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
@@ -34,15 +44,19 @@ executable haskell-tiger-exe
                      , haskell-tiger
   default-language:    Haskell2010
 
-test-suite haskell-tiger-test
+test-suite test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
                      , haskell-tiger
+                     , QuickCheck
+                     , tasty
+                     , tasty-quickcheck
+                     , tasty-hunit
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 source-repository head
   type:     git
-  location: https://github.com/githubuser/haskell-tiger
+  location: https://github.com/themattchan/haskell-tiger
