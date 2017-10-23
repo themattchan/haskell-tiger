@@ -47,7 +47,7 @@ data Exp a
   | Assign (Var a) (Exp a)                          a
   | If (Exp a) (Exp a) (Maybe (Exp a))              a
   | While (Exp a) (Exp a)                           a
-  | For Symbol Bool (Exp a) (Exp a) (Exp a)         a
+  | For Symbol (Exp a) (Exp a) (Exp a)              a
   | Break                                           a
   | Let [Decl a] (Exp a)                            a
   | Array Symbol (Exp a) (Exp a)                    a
@@ -78,14 +78,24 @@ data Ty a
   | IntTy
   | StringTy
   | UnitTy
-  deriving (Show, Eq, Functor, Foldable, Traversable)
+  deriving (Show, Functor, Foldable, Traversable)
+
+instance Eq (Ty a) where
+  UnitTy == UnitTy = True
+  StringTy == StringTy = True
+  IntTy == IntTy = True
+  NilTy == NilTy = True
+  ArrayTy _ u _ == ArrayTy _ w _ = u == w
+  RecordTy _ u == RecordTy _ w = u == w
+  NameTy s t == NameTy s' t' = s == s' && t == t'
+  _ == _ = False
 
 makePrisms ''Ty
 
 data Field a
   = Field
     { fieldName   :: Symbol
-    , fieldEscape :: Bool
+--    , fieldEscape :: Bool
     , fieldType   :: Symbol
     , fieldAnnot  :: a
     } deriving (Show, Functor, Foldable, Traversable)

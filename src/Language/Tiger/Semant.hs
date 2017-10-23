@@ -13,37 +13,14 @@ import Control.Monad.Writer.Lazy
 
 import Language.Tiger.Types
 import Language.Tiger.Gensym
+import qualified Language.Tiger.Env as Env
 import qualified Language.Tiger.Symtab as Symtab
-
-data VEnvTy = VarTy Ty
-            | FunTy [Ty] Ty
-
-venv0 :: Symtab.Symtab VEnvTy
-venv0 = fromList
-  [ ("print", FunEntry [StringTy] UnitTy)
-  , ("flush", FunEntry [] UnitTy)
-  , ("getchar", FunEntry [] StringTy)
-  , ("ord", FunEntry [StringTy] IntTy)
-  , ("chr", FunEntry [IntTy] StringTy)
-  , ("size", FunEntry [StringTy] IntTy)
-  , ("substring", FunEntry [StringTy, IntTy, IntTy] IntTy)
-  , ("concat", FunEntry [StringTy, StringTy] StringTy)
-  , ("not", FunEntry [IntTy] IntTy)
-  , ("exit", FunEntry [IntTy] UnitTy)
-  ]
-
-tenv0 :: Symtab.Symtab Ty
-tenv0 = fromList
-  [ ("int", IntTy)
-  , ("string", StringTy)
-  ]
 
 data TransError = TypeMismatch | TypeUndefined | NoHOF | UnboundVariable
                 | NoSuchField
 
-
 transVar :: MonadError TransError m
-         => Symtab.Symtab VEnvTy -> Symtab.Symtab (Ty ())
+         => Symtab.Symtab Env.Env -> Symtab.Symtab (Ty ())
          -> Var a -> m (Exp (Ty (), a))
 transVar venv tenv var = case var of
   SimpleVar varName a
@@ -87,7 +64,7 @@ checkOp op tl tr
     isEq    = any (op ==) [Eq, Neq]
 
 transExp :: MonadError TransError m
-         => Symtab.Symtab VEnvTy -> Symtab.Symtab (Ty ())
+         => Symtab.Symtab Env.Env -> Symtab.Symtab (Ty ())
          -> Exp a -> m (Exp (Ty (), a))
 transExp venv tenv exp = case exp of
   Var v _
@@ -165,8 +142,8 @@ transExp venv tenv exp = case exp of
       return fe'
 
 transDec :: MonadError TransError m
-         => Symtab.Symtab VEnvTy -> Symtab.Symtab (Ty a)
-         -> Dec a -> m (Symtab.Symtab VEnvTy, Symtab.Symtab (Ty a))
+         => Symtab.Symtab Env.Env -> Symtab.Symtab (Ty a)
+         -> Dec a -> m (Symtab.Symtab Env.Env, Symtab.Symtab (Ty a))
 transDec venv tenv dec = case dec of
   FunctionDecl fs
      -> foldM (uncurry goFun) (venv,tenv) fs
