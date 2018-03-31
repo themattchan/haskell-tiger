@@ -1,5 +1,6 @@
 {
 module Language.Tiger.Lexer where
+import Language.Tiger.Loc
 }
 %wrapper "posn"
 
@@ -114,11 +115,10 @@ data Token
   | StringLit String
   deriving (Eq, Show)
 
-data PosToken = PosToken { tokPos :: AlexPosn, tok :: Token }
 
 
-mkT :: (String -> Token) -> AlexPosn -> String -> PosToken
-mkT t p s = PosToken p (t s)
+mkT :: (String -> Token) -> AlexPosn -> String -> Loc Token
+mkT t p s = Loc p (t s)
 
 mkL l = mkT . const l
 }

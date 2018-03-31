@@ -11,6 +11,9 @@ import qualified Data.ByteString.Strict as B
 import Data.Hashable
 import Control.Comonad
 
+class Functor f => Ann f where
+  ann :: f a -> a
+
 newtype Symbol = Sym { symbol :: B.ByteString }
   deriving (Show, Eq, Hashable)
 
@@ -23,9 +26,14 @@ data Var a
   = SimpleVar Symbol                  a
   | FieldVar (Var a) Symbol           a
   | SubscriptVar (Var a) (Exp a)      a
-  deriving (Show, Functor, Foldable, Traversable)
+  deriving (Show, Functor, Foldable, Traversable, Ann)
 
 makePrisms ''Var
+
+-- instance Ann Var where
+--   ann (SimpleVar _ a) = a
+--   ann (FieldVar _ _ a) = a
+--   ann (SubscriptVar _ _ ) = a
 
 data Op
   = Plus | Minus | Times | Divide
@@ -51,20 +59,25 @@ data Exp a
   | Break                                           a
   | Let [Decl a] (Exp a)                            a
   | Array Symbol (Exp a) (Exp a)                    a
-  deriving (Show, Eq, Functor, Foldable, Traversable, Comonad)
+  deriving (Show, Eq, Functor, Foldable, Traversable, Comonad, Ann)
 
 makePrisms ''Exp
 
 data Decl a
-  = FunctionDecl [Function a]
+  = FunctionDecl [Function a] a
   | VarDecl { name   :: Symbol
             , escape :: Bool
             , typ    :: Maybe (Symbol,a)
             , init   :: Exp
             , meta   :: a
             }
-  | TypeDecl [(Symbol, Ty, m)]
+  | TypeDecl [(Symbol, Ty a, a)] a
   deriving (Show, Eq, Functor, Foldable, Traversable)
+
+instance Ann Decl where
+  ann (FunctionDecl _ a) = a
+  ann (VarDecl{meta}) = meta
+  ann (TypeDecl _ a) = a
 
 makePrisms ''Decl
 
@@ -72,13 +85,13 @@ type Unique = Int
 
 data Ty a
   = NameTy Symbol (Maybe (Ty a))  a
-  | RecordTy [Field a] Unique
+  | RecordTy [Field a] Unique     a
   | ArrayTy Symbol Unique         a
-  | NilTy
-  | IntTy
-  | StringTy
-  | UnitTy
-  deriving (Show, Functor, Foldable, Traversable)
+  | NilTy                         a
+  | IntTy                         a
+  | StringTy                      a
+  | UnitTy                        a
+  deriving (Show, Functor, Foldable, Traversable, Ann)
 
 instance Eq (Ty a) where
   UnitTy == UnitTy = True
@@ -100,6 +113,8 @@ data Field a
     , fieldAnnot  :: a
     } deriving (Show, Functor, Foldable, Traversable)
 
+instance Ann Field where ann = fieldAnnot
+
 makeLenses ''Field
 
 data Function a
@@ -111,4 +126,5 @@ data Function a
     , funAnnot  :: a
     } deriving (Show, Functor, Foldable, Traversable)
 
+instance Ann Function where ann = functionAnnot
 makeLenses ''Function

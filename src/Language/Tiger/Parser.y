@@ -3,63 +3,67 @@ module Language.Tiger.Parser where
 import Alex.Scan (AlexPosn(..))
 import Language.Tiger.Lexer
 import qualified Language.Tiger.Types as Ty
+import Language.Tiger.Loc
 }
 
 %name happyParser
-%tokentype { PosToken }
+%tokentype { Loc Token }
 
 
 %token
-  VAR         { PosToken $$ Var       }
-  WHILE       { PosToken $$ While     }
-  FOR         { PosToken $$ For       }
-  TO          { PosToken $$ To        }
-  BREAK       { PosToken $$ Break     }
-  LET         { PosToken $$ Let       }
-  IN          { PosToken $$ In        }
-  END         { PosToken $$ End       }
-  FUNCTION    { PosToken $$ Function  }
-  VAR         { PosToken $$ Var       }
-  TYPE        { PosToken $$ Type      }
-  ARRAY       { PosToken $$ Array     }
-  IF          { PosToken $$ If        }
-  THEN        { PosToken $$ Then      }
-  ELSE        { PosToken $$ Else      }
-  DO          { PosToken $$ Do        }
-  OF          { PosToken $$ Of        }
-  NIL         { PosToken $$ Nil       }
-  ","         { PosToken $$ Comma     }
-  ":"         { PosToken $$ Colon     }
-  ";"         { PosToken $$ Semi      }
-  "("         { PosToken $$ LPar      }
-  ")"         { PosToken $$ RPar      }
-  "["         { PosToken $$ LBrack    }
-  "]"         { PosToken $$ RBrack    }
-  "{"         { PosToken $$ LBrace    }
-  "}"         { PosToken $$ RBrace    }
-  "."         { PosToken $$ Dot       }
-  "+"         { PosToken $$ Plus      }
-  "-"         { PosToken $$ Minus     }
-  "*"         { PosToken $$ Times     }
-  "/"         { PosToken $$ Divide    }
-  "="         { PosToken $$ Eq        }
-  "<>"        { PosToken $$ Neq       }
-  ">"         { PosToken $$ Gt        }
-  "<"         { PosToken $$ Lt        }
-  ">="        { PosToken $$ Ge        }
-  "<="        { PosToken $$ Le        }
-  "&"         { PosToken $$ And       }
-  "|"         { PosToken $$ Or        }
-  ":="        { PosToken $$ Assign    }
+  INT         { Loc _ (IntLit _) }
+  ID          { Loc _ (Ident _ ) }
+  STRING      { Loc _ (StringLit _ ) }
+
+  'var'       { Loc $$ Var       }
+  'while'     { Loc $$ While     }
+  'for'       { Loc $$ For       }
+  'to'        { Loc $$ To        }
+  'break'     { Loc $$ Break     }
+  'let'       { Loc $$ Let       }
+  'in'        { Loc $$ In        }
+  'end'       { Loc $$ End       }
+  'function'  { Loc $$ Function  }
+  'var'       { Loc $$ Var       }
+  'type'      { Loc $$ Type      }
+  'array'     { Loc $$ Array     }
+  'if'        { Loc $$ If        }
+  'then'      { Loc $$ Then      }
+  'else'      { Loc $$ Else      }
+  'do'        { Loc $$ Do        }
+  'of'        { Loc $$ Of        }
+  'nil'       { Loc $$ Nil       }
+  ','         { Loc $$ Comma     }
+  ':'         { Loc $$ Colon     }
+  ';'         { Loc $$ Semi      }
+  '('         { Loc $$ LPar      }
+  ')'         { Loc $$ RPar      }
+  '['         { Loc $$ LBrack    }
+  ']'         { Loc $$ RBrack    }
+  '{'         { Loc $$ LBrace    }
+  '}'         { Loc $$ RBrace    }
+  '.'         { Loc $$ Dot       }
+  '+'         { Loc $$ Plus      }
+  '-'         { Loc $$ Minus     }
+  '*'         { Loc $$ Times     }
+  '/'         { Loc $$ Divide    }
+  '='         { Loc $$ Eq        }
+  '<>'        { Loc $$ Neq       }
+  '>'         { Loc $$ Gt        }
+  '<'         { Loc $$ Lt        }
+  '>='        { Loc $$ Ge        }
+  '<='        { Loc $$ Le        }
+  '&'         { Loc $$ And       }
+  '|'         { Loc $$ Or        }
+  ':='        { Loc $$ Assign    }
 
 %%
 
 program :: { Exp AlexPosn }
-program
   : exp { $1 }
 
 exp :: { Exp AlexPosn }
-exp: lvalue      { $1 }
+   : lvalue      { $1 }
    | record      { $1 }
    | sequence    { $1 }
    | app         { $1 }
@@ -69,125 +73,132 @@ exp: lvalue      { $1 }
    | array       { $1 }
    | assign      { $1 }
    | control     { $1 }
-   | NIL         { Nil $1 }
-   | INT         { }
-   | STRING      { } (A.StringExp(INT,pos))
 
 decs :: { [Decl AlexPosn] }
-decs: {- nil -}  { [] }
-    | dec decs   { $1 : $2 }
+  : {- nil -}  { [] }
+  | dec decs   { $1 : $2 }
 
 dec :: { Decl AlexPosn }
-dec
   : vardec  { $1 }
-  | fundec  { $1 }
+  | fundec  { Function [$1] (ann $1) }
   | tydec   { $1 }
 
+vardec :: { Decl AlexPosn }
+  : 'var' ID ':=' exp
+     { VarDecl $1 True None      $4 (spanPos (ann $1) (ann $4)) }
+  | 'var' ID ':' ID ':=' exp
+     { VarDecl $1 True (Just $4) $6 (spanPos (ann $1) (ann $6)) }
 
-vardec: VAR ID ASSIGN exp (A.VarDec(ID, true, Option.None, exp, pos))
-      | VAR ID COLON ID ASSIGN exp (A.VarDec(ID, true, Option.Some(ID)
+fundec :: { Function AlexPosn }
+  : 'function' ID '(' tyfields ')' exp
+     { Function $2 $4 None      $6 (spanPos (ann $1) (ann $6)) }
+  | 'function' ID '(' tyfields ')' ':' ID exp
+     { Function $2 $4 (Just $7) $8 (spanPos (ann $1) (ann $8)) }
 
-fundec: FUNCTION ID LPAREN tyfields RPAREN exp ()
-      | FUNCTION ID LPAREN tyfields RPAREN COLON ID exp ()
+tyfields :: { [Field AlexPosn] }
+  : {- nil -} { [] }
+  | tyfield1 tyfieldss { $1 : $2 }
 
+tyfield1 :: { Field AlexPosn }
+  : ID ':' ID { Field $1 $3 (spanPos (ann $1) (ann $3)) }
 
-tyfields: {- nil -} ()
-        | tyfield1 tyfieldss ()
+tyfieldss :: { [Field AlexPosn] }
+  : {- nil -} { [] }
+  | ',' tyfield1 tyfieldss { $2 : $3 }
 
-tyfield1: ID COLON ID ()
+tydec :: { (Symbol, Ty AlexPosn, AlexPosn) }
+  : 'type' ID '=' ty { ($2, $4, spanPos (ann $1) (ann $4)) }
 
-tyfieldss: {- nil -} ()
-         | COMMA tyfield1 tyfieldss ()
+ty :: { Ty AlexPosn }
+  : ID { }
+  | '{' tyfields '}' { }
+  | 'array' 'of' ID { }
 
-tydec: TYPE ID EQ ty ()
+lvalue :: {}
+  : ID lvalue1 {}
 
-ty: ID ()
-  | LBRACE tyfields RBRACE ()
-  | ARRAY OF ID ()
-
-
-lvalue: ID lvalue1 ()
-
-lvalue1: {- nil -} ()
-       | DOT ID lvalue1 ()
-       | LBRACK exp RBRACK lvalue1 ()
+lvalue1 :: {}
+  : {- nil -} {}
+  | '.' ID lvalue1 {}
+  | '[' exp ']' lvalue1 {}
 
 control :: { Exp AlexPosn }
-control
-  : IF exp THEN exp ELSE exp          { If $2 $4 (Just $6)    $1 }
-  | IF exp THEN exp                   { If $2 $4  Nothing     $1 }
-  | WHILE exp DO exp                  { While $2 $4           $1 }
-  | FOR ID ASSIGN exp TO exp DO exp   { For $2 False $4 $6 $8 $1 }
-  | BREAK                             { Break                 $1 }
-  | LET decs IN expseq END            { Let $2 (Seq $4)       $1 }
+  : 'if' exp 'then' exp 'else' exp        { If $2 $4 (Just $6)    (spanPos (ann $1) (ann $6)) }
+  | 'if' exp 'then' exp                   { If $2 $4  Nothing     (spanPos (ann $1) (ann $5)) }
+  | 'while' exp 'do' exp                  { While $2 $4           (spanPos (ann $1) (ann $4)) }
+  | 'for' ID ':=' exp 'to' exp 'do' exp   { For $2 False $4 $6 $8 (spanPos (ann $1) (ann $8)) }
+  | 'break'                               { Break                 (ann $1) }
+  | 'let' decs 'in' expseq 'end'          { Let $2 (Seq $4)       (spanPos (ann $1) (ann $5)) }
 
 expseq :: { [(Exp AlexPosn, AlexPosn)] }
-expseq
-  : {- nil -}                         { []                      }
-  | exp SEMICOLON expseq              { (($1,$2) : $3)          }
+  : {- nil -}                   { []                      }
+  | exp ';' expseq              { (($1,$2) : $3)          }
 
-app
-  : ID LPAREN args RPAREN ()
+app :: {}
+  : ID '(' args ')' { }
 
-args
-  : {- nil -}    ()
-  | exp moreargs ()
+args :: {}
+  : {- nil -}    { }
+  | exp moreargs { }
 
-moreargs
-  : {- nil -}          ()
-  | COMMA exp moreargs ()
+moreargs :: {}
+  : {- nil -}          { }
+  | ',' exp moreargs { }
 
 cmpexp :: { Exp AlexPosn }
-cmpexp
-  : exp EQ  exp                  { Op $1 Eq      $3 $2  }
-  | exp NEQ exp                  { Op $1 Neq     $3 $2  }
-  | exp LT  exp                  { Op $1 Lt      $3 $2  }
-  | exp GT  exp                  { Op $1 Gt      $3 $2  }
-  | exp LE  exp                  { Op $1 Le      $3 $2  }
-  | exp GE  exp                  { Op $1 Ge      $3 $2  }
+  : exp '='   exp   { Op $1 Eq      $3 (spanPos (ann $1) (ann $3))  }
+  | exp '<>'  exp   { Op $1 Neq     $3 (spanPos (ann $1) (ann $3))  }
+  | exp '>'   exp   { Op $1 Lt      $3 (spanPos (ann $1) (ann $3))  }
+  | exp '<'   exp   { Op $1 Gt      $3 (spanPos (ann $1) (ann $3))  }
+  | exp '>='  exp   { Op $1 Le      $3 (spanPos (ann $1) (ann $3))  }
+  | exp '<='  exp   { Op $1 Ge      $3 (spanPos (ann $1) (ann $3))  }
 
 mathexp :: { Exp AlexPosn }
-mathexp
-  :     MINUS  exp %prec UMINUS { Int (- $2 )      $1  }
-  | exp PLUS   exp              { Op $1 Plus   $3  $2  }
-  | exp MINUS  exp              { Op $1 Minus  $3  $2  }
-  | exp TIMES  exp              { Op $1 Times  $3  $2  }
-  | exp DIVIDE exp              { Op $1 Divide $3  $2  }
+  :     '-'  exp %prec UMINUS { Int (- $2 )      (spanPos (ann $1) (ann $2))  }
+  | exp '+'  exp              { Op $1 Plus   $3  (spanPos (ann $1) (ann $3))  }
+  | exp '-'  exp              { Op $1 Minus  $3  (spanPos (ann $1) (ann $3))  }
+  | exp '*'  exp              { Op $1 Times  $3  (spanPos (ann $1) (ann $3))  }
+  | exp '/'  exp              { Op $1 Divide $3  (spanPos (ann $1) (ann $3))  }
 
 boolexp :: { Exp AlexPosn }
-boolexp
-  : exp AND exp { Op $1 And $3 $2 }
-  | exp OR  exp { Op $1 Or  $3 $2 }
+  : exp '&' exp                 { Op $1 And    $3  (spanPos (ann $1) (ann $3)) }
+  | exp '|' exp                 { Op $1 Or     $3  (spanPos (ann $1) (ann $3)) }
 
 assign :: { Exp AlexPosn }
-assign
-  : lvalue ASSIGN exp { }
+  : lvalue ':=' exp { }
 
 sequence :: { Exp AlexPosn }
-sequence
-  : LPAREN sequence1 RPAREN { Seq $2 $1 }
+  : '(' sequence1 ')' { Seq $2 $1 }
 
 sequence1 :: { [(Exp AlexPosn, AlexPosn)] }
-sequence1
   : {- nil -}      { [] }
   | exp sequence2  { }
 
-sequence2: {- nil -}               ()
-         | SEMICOLON exp sequence2 ()
+sequence2 :: { }
+  : {- nil -}         {}
+  | ';' exp sequence2 {}
 
-record: ID LBRACE field1 fields RBRACE ()
+record :: {}
+  : ID '{' field1 fields '}' {}
 
-field1: ID EQ exp ()
+field1 :: {}
+  : ID '=' exp {}
 
-fields: {- nil -}           ()
-      | COMMA field1 fields ()
+fields :: {}
+  : {- nil -}         {}
+  | ',' field1 fields {}
 
 array :: { }
-array: ID LBRACK exp RBRACK OF exp  { }
+  : ID '{' exp '}' OF exp  { }
 
 
 {
+type L = AlexPosn
+
 parseError :: [PosToken] -> a
 parseError _ = error "Parse error"
+
+spanPos :: L -> L -> L
+spanPos beg end = beg
 
 }
