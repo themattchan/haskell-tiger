@@ -1,4 +1,4 @@
--- Chapter 7: Translation to Intermediate Code
+-- | Chapter 7: Translation to Intermediate Code
 
 module Language.Tiger.IR where
 import Data.List
