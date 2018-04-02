@@ -7,12 +7,12 @@ module Language.Tiger.Symtab
   , lookup
   ) where
 
+import Prelude hiding (lookup)
 import qualified Data.HashMap.Strict as HM
 
-import Language.Tiger.Types (Type(..), Symbol(..))
+import Language.Tiger.Types (Ty(..), Symbol(..))
 
-type Symtab a = HM.HashMap Symbol (Type a)
-
+type Symtab a = HM.HashMap Symbol a
 -- newtype Symbol = Sym B.ByteString
 --   deriving (Show, Eq)
 

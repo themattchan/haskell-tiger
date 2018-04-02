@@ -31,6 +31,7 @@ data Op
   = Plus | Minus | Times | Divide
   | Eq | Neq
   | Lt | Le | Gt | Ge
+  | And | Or
   deriving (Show, Eq, Enum, Bounded)
 
 data Exp a
@@ -41,7 +42,7 @@ data Exp a
   | Call Symbol [Exp a]                             a
   | Op (Exp a) Op (Exp a)                           a
   | Record [(Symbol, Exp a, a)] Symbol              a
-  | Seq [(Exp a, a)]                                a
+  | Seq [Exp a]                                     a
   | Assign (Var a) (Exp a)                          a
   | If (Exp a) (Exp a) (Maybe (Exp a))              a
   | While (Exp a) (Exp a)                           a
@@ -118,6 +119,11 @@ makeLenses ''Function
 
 class Functor f => Ann f where
   ann :: f a -> a
+
+instance Ann Var where
+  ann (SimpleVar _      a) = a
+  ann (FieldVar _ _     a) = a
+  ann (SubscriptVar _ _ a) = a
 
 instance Ann Exp where
   ann (Var _       a) = a
