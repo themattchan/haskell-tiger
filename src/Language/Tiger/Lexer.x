@@ -1,6 +1,7 @@
 {
 module Language.Tiger.Lexer (Token(..), alexScanTokens) where
 import Language.Tiger.Loc
+import Language.Tiger.Token
 import qualified Data.ByteString.Lazy as ByteString
 import qualified Data.ByteString.Lazy.Char8 as BL8 (unpack)
 }
@@ -67,55 +68,6 @@ tiger :-
 
 
 {
-data Token
-  = Var
-  | While
-  | For
-  | To
-  | Break
-  | Let
-  | In
-  | End
-  | Function
-
-  | Type
-  | Array
-  | If
-  | Then
-  | Else
-  | Do
-  | Of
-  | Nil
-
-  | Comma
-  | Colon
-  | Semi
-  | LPar
-  | RPar
-  | LBrack
-  | RBrack
-  | LBrace
-  | RBrace
-  | Dot
-  | Plus
-  | Minus
-  | Times
-  | Divide
-  | Eq
-  | Neq
-  | Gt
-  | Lt
-  | Ge
-  | Le
-  | And
-  | Or
-  | Assign
-
-  | IntLit Int
-  | Ident ByteString.ByteString
-  | StringLit ByteString.ByteString
-  deriving (Eq, Show)
-
 
 mkT :: (ByteString.ByteString -> Token) -> AlexPosn -> ByteString.ByteString -> Loc Token
 mkT t (AlexPn absoff ln_no col_no) s = Loc (SrcPosn absoff ln_no col_no) (t s)

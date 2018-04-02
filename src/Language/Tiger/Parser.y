@@ -1,11 +1,13 @@
 {
 module Language.Tiger.Parser where
---import Alex.Scan (AlexPosn(..))
+
 import Data.Semigroup
 import Data.String
-import qualified Language.Tiger.Lexer as Tok
-import Language.Tiger.Types
+
+import Language.Tiger.Lexer (alexScanTokens)
+import qualified Language.Tiger.Lexer as Tok (Token(..))
 import Language.Tiger.Loc
+import Language.Tiger.Types
 }
 
 %name parseProgram program
@@ -97,50 +99,50 @@ dec :: { Decl L }
 
 vardec :: { Decl L }
   : 'var' ID ':=' exp
-     { VarDecl (symb $2) True Nothing      $4 (spr $1 $4) }
+     { VarDecl (sym $2) True Nothing      $4 (spr $1 $4) }
   | 'var' ID ':' ID ':=' exp
-     { VarDecl (symb $2) True (Just (symb $4, sp $4)) $6 (spr $1 $6) }
+     { VarDecl (sym $2) True (Just (sym $4, sp $4)) $6 (spr $1 $6) }
 
 fundec :: { Function L }
   : 'function' ID '(' tyfields ')' exp
-     { Function (symb $2) $4 Nothing      $6 (spr $1 $6) }
+     { Function (sym $2) $4 Nothing      $6 (spr $1 $6) }
   | 'function' ID '(' tyfields ')' ':' ID exp
-     { Function (symb $2) $4 (Just (symb $7, sp $7)) $8 (spr $1 $8) }
+     { Function (sym $2) $4 (Just (sym $7, sp $7)) $8 (spr $1 $8) }
 
 tyfields :: { [Field L] }
   : {- nil -} { [] }
   | tyfield1 tyfieldss { $1 : $2 }
 
 tyfield1 :: { Field L }
-  : ID ':' ID { Field (symb $1) (symb $3) (spr $1 $3) }
+  : ID ':' ID { Field (sym $1) (sym $3) (spr $1 $3) }
 
 tyfieldss :: { [Field L] }
   : {- nil -} { [] }
   | ',' tyfield1 tyfieldss { $2 : $3 }
 
 tydec :: { (Symbol, Ty L, L) }
-  : 'type' ID '=' ty { (symb $2, $4, (spr $1 $4)) }
+  : 'type' ID '=' ty { (sym $2, $4, (spr $1 $4)) }
 
 ty :: { Ty L }
-  : ID                { NameTy (symb $1) Nothing (sp $1) }
+  : ID                { NameTy (sym $1) Nothing (sp $1) }
   | '{' tyfields '}'  { RecordTy $2 123456789 (spr $1 $3) } -- FIXME generate unique number
-  | 'array' 'of' ID   { ArrayTy  (symb $3) 123456789 (spr $1 $3) } -- FIXME generate unique number
+  | 'array' 'of' ID   { ArrayTy  (sym $3) 123456789 (spr $1 $3) } -- FIXME generate unique number
 
 lvalue :: { Var L }
-  : ID      { SimpleVar (symb $1) (sp $1) }
+  : ID      { SimpleVar (sym $1) (sp $1) }
   | lvalue1 { $1 }
 
 lvalue1 :: { Var L }
-  : ID '.' ID            { FieldVar (SimpleVar (symb $1) (sp $1)) (symb $3) (spr $1 $3) }
-  | lvalue1 '.' ID       { FieldVar $1 (symb $3) (spr $1 $3)  }
-  | ID '[' exp ']'       { SubscriptVar (SimpleVar (symb $1) (sp $1)) $3 (spr $1 $4) }
+  : ID '.' ID            { FieldVar (SimpleVar (sym $1) (sp $1)) (sym $3) (spr $1 $3) }
+  | lvalue1 '.' ID       { FieldVar $1 (sym $3) (spr $1 $3)  }
+  | ID '[' exp ']'       { SubscriptVar (SimpleVar (sym $1) (sp $1)) $3 (spr $1 $4) }
   | lvalue1 '[' exp ']'  { SubscriptVar $1 $3 (spr $1 $4) }
 
 control :: { Exp L }
   : 'if' exp 'then' exp 'else' exp        { If $2 $4 (Just $6)     (spr $1 $6) }
   | 'if' exp 'then' exp                   { If $2 $4  Nothing      (spr $1 $4) }
   | 'while' exp 'do' exp                  { While $2 $4            (spr $1 $4) }
-  | 'for' ID ':=' exp 'to' exp 'do' exp   { For (symb $2) $4 $6 $8 (spr $1 $8) }
+  | 'for' ID ':=' exp 'to' exp 'do' exp   { For (sym $2) $4 $6 $8 (spr $1 $8) }
   | 'break'                               { Break                  (sp $1)     }
   | 'let' decs 'in' expseq 'end'          { Let $2 (Seq $4 (foldMap sp $4)) (spr $1 $5) }
 
@@ -149,7 +151,7 @@ expseq :: { [Exp L] }
   | exp ';' expseq              { $1 : $3          }
 
 app :: { Exp L }
-  : ID '(' args ')' { Call (symb $1) $3 ((sp $1)<> (sp $4)) }
+  : ID '(' args ')' { Call (sym $1) $3 ((sp $1)<> (sp $4)) }
 
 args :: { [Exp L] }
   : {- nil -}    { [] }
@@ -193,17 +195,17 @@ sequence2 :: { [Exp L] }
   | ';' exp sequence2 { $2 : $3 }
 
 record :: { Exp L }
-  : ID '{' field1 fields '}' { Record ($3:$4) (symb $1) (spr $1 $5) }
+  : ID '{' field1 fields '}' { Record ($3:$4) (sym $1) (spr $1 $5) }
 
 field1 :: { (Symbol, Exp L, L) }
-  : ID '=' exp { (symb $1, $3, (spr $1 $3)) }
+  : ID '=' exp { (sym $1, $3, (spr $1 $3)) }
 
 fields :: { [(Symbol, Exp L, L)] }
   : {- nil -}         { [] }
   | ',' field1 fields { $2 : $3 }
 
 array :: { Exp L }
-  : ID '{' exp '}' 'of' exp  { Array (symb $1) $3 $6  (spr $1 $6) }
+  : ID '{' exp '}' 'of' exp  { Array (sym $1) $3 $6  (spr $1 $6) }
 
 
 {
@@ -231,6 +233,6 @@ instance (Ann f) => HasSrcSpan (f SrcSpan) where
 spr :: (HasSrcSpan x, HasSrcSpan y) => x -> y -> SrcSpan
 spr x y = sp x <> sp y
 
-symb (Loc _ (Tok.Ident s)) = Sym s
+sym (Loc _ (Tok.Ident s)) = Sym s
 
 }

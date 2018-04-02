@@ -18,13 +18,14 @@ extra-source-files:  src/Language/Tiger/Lexer.x
 library
   hs-source-dirs:      src
   exposed-modules:     Language.Tiger
+                     , Language.Tiger.Loc
+                     , Language.Tiger.Token
                      , Language.Tiger.Types
                      , Language.Tiger.Gensym
                      , Language.Tiger.Symtab
---                     , Language.Tiger.Semant
+                     -- , Language.Tiger.Semant
                      -- , Language.Tiger.Env
                      -- , Language.Tiger.IR
-                     -- , Language.Tiger.Loc
                      -- , Language.Tiger.Temp
                      -- , Language.Tiger.Translate
                      -- , Language.Tiger.Access
