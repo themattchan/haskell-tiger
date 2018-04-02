@@ -1,20 +1,23 @@
-module Spec where
+module Main where
 
 import Data.Either
 import Data.Traversable
 
 import System.Directory
+--import System.FilePath
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import qualified Data.ByteString.Lazy as BL
 
-import Language.Tiger.Parser
+import Language.Tiger.MyParser
 
 main :: IO ()
-main = defaultMain $ do
-  progs <- sampleProgs
-  testGroup "parser" (map testParser progs)
+main = withCurrentDirectory "testcases" $ do
+  progs <- listDirectory "."
+
+  defaultMain $
+    testGroup "parser" (map testParser progs)
 
 sampleProgs :: IO [FilePath]
 sampleProgs = listDirectory "testcases"
@@ -22,4 +25,5 @@ sampleProgs = listDirectory "testcases"
 testParser :: FilePath -> TestTree
 testParser file = testCase file $ do
   src <- BL.readFile file
-  isRight (parseProgram src) @?= True
+  let p = parseProgram src
+  assertBool (either id show p) (isRight p)

@@ -20,7 +20,7 @@ import Language.Tiger.Types
 
 %token
   INT         { Loc _ (Tok.IntLit _) }
-  ID          { Loc _ (Tok.Ident _ ) } -- FIXME this needs to be converted into Symbol
+  ID          { Loc _ (Tok.Ident _ ) }
   STRING      { Loc _ (Tok.StringLit _ ) }
 
   'var'       { Loc $$ Tok.Var       }
