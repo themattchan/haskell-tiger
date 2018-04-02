@@ -19,6 +19,7 @@ $alpha = [$lower $upper]       -- alphabetic characters
 tiger :-
   $white+               ;
   "--".*                ;
+  "/*" ([[. \n] # \*] | \* [[. \n] # \/])* ("*")+ "/" ;
 
   var         { mkL Var       }
   while       { mkL While     }
