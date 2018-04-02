@@ -9,7 +9,7 @@
 module Language.Tiger.Types where
 
 import Control.Lens.TH (makeLenses, makePrisms)
-import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Hashable
 import Control.Comonad
 import GHC.Generics

@@ -21,13 +21,13 @@ library
                      , Language.Tiger.Types
                      , Language.Tiger.Gensym
                      , Language.Tiger.Symtab
-                     , Language.Tiger.Semant
-                     , Language.Tiger.Env
-                     , Language.Tiger.IR
-                     , Language.Tiger.Loc
-                     , Language.Tiger.Temp
-                     , Language.Tiger.Translate
-                     , Language.Tiger.Access
+--                     , Language.Tiger.Semant
+                     -- , Language.Tiger.Env
+                     -- , Language.Tiger.IR
+                     -- , Language.Tiger.Loc
+                     -- , Language.Tiger.Temp
+                     -- , Language.Tiger.Translate
+                     -- , Language.Tiger.Access
   other-modules:       Language.Tiger.Lexer
                      , Language.Tiger.Parser
   build-tools:         alex
@@ -65,6 +65,7 @@ test-suite test
                      , tasty
                      , tasty-quickcheck
                      , tasty-hunit
+                     , directory
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

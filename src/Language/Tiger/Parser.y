@@ -8,7 +8,8 @@ import Language.Tiger.Types
 import Language.Tiger.Loc
 }
 
-%name happyParser
+%name parseProgram program
+%error { parseError }
 %tokentype { Loc Tok.Token }
 
 
@@ -208,8 +209,8 @@ array :: { Exp L }
 {
 type L = SrcSpan
 
-happyError :: [Loc Tok.Token] -> a
-happyError _ = error "A parse error occurred"
+parseError :: [Loc Tok.Token] -> a
+parseError _ = error "A parse error occurred"
 
 
 class HasSrcSpan a where
@@ -230,6 +231,6 @@ instance (Ann f) => HasSrcSpan (f SrcSpan) where
 spr :: (HasSrcSpan x, HasSrcSpan y) => x -> y -> SrcSpan
 spr x y = sp x <> sp y
 
-symb (Loc _ (Tok.Ident s)) = Sym (fromString s)
+symb (Loc _ (Tok.Ident s)) = Sym s
 
 }

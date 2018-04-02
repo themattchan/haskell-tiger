@@ -1,6 +1,6 @@
 module Main where
 
-import Lib
+import Language.Tiger
 
 main :: IO ()
-main = someFunc
+main = return ()

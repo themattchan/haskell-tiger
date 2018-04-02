@@ -6,6 +6,7 @@ import Data.Semigroup
 data SrcPosn = SrcPosn !Int  -- absolute character offset
                        !Int  -- line number
                        !Int  -- column number
+  deriving (Show, Eq)
 
 data SrcSpan = SrcSpan
   { srcSpanStartLine  :: !Int
@@ -32,3 +33,4 @@ spanSize :: SrcSpan -> (Int, Int)
 spanSize ss = (srcSpanEndLine ss - srcSpanStartLine ss, max 0 (srcSpanEndCol ss - srcSpanStartCol ss))
 
 data Loc a = Loc { locPosn :: SrcPosn, locData :: a }
+  deriving Show

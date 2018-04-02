@@ -3,12 +3,13 @@ import Language.Tiger.Types
 import qualified Language.Tiger.Translate as Translate
 import qualified Language.Tiger.Temp as Temp
 
-data Env.Env
+{-
+data Env
   = VarTy { access :: Translate.Access, ty :: Ty }
   | FunTy { level :: Translate.Level, label :: Temp.Label
           , formals :: [Ty], result :: Ty }
 
-venv0 :: Symtab.Symtab Env.Env
+venv0 :: Symtab.Symtab Env
 venv0 = fromList
   [ ("print", FunEntry [StringTy] UnitTy)
   , ("flush", FunEntry [] UnitTy)
@@ -27,3 +28,4 @@ tenv0 = fromList
   [ ("int", IntTy)
   , ("string", StringTy)
   ]
+-}

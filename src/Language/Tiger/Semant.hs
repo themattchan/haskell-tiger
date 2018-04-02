@@ -52,7 +52,7 @@ getTy = pure . fst . extract
 checkOp :: MonadError TransError m
         => Op -> Ty () -> Ty () -> m (Ty ())
 checkOp op tl tr
-  | isArith = do
+  | isArith
   , IntTy == tl
   , IntTy == tr
   = pure IntTy
@@ -80,10 +80,9 @@ transExp venv tenv exp = case exp of
     -> annotTy StringTy exp
 
   Call funTy args _
-    -> case Symtab.lookup venv
+    -> undefined --case Symtab.lookup venv
 
-  Op l o r _
-    -> do
+  Op l o r _ -> do
     tl <- getTy l
     tr <- getTy r
     to <- checkOp o tl tr

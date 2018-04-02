@@ -1,8 +1,10 @@
 {
-module Language.Tiger.Lexer where
+module Language.Tiger.Lexer (Token(..), alexScanTokens) where
 import Language.Tiger.Loc
+import qualified Data.ByteString.Lazy as ByteString
+import qualified Data.ByteString.Lazy.Char8 as BL8 (unpack)
 }
-%wrapper "posn"
+%wrapper "posn-bytestring"
 
 
 $digit = 0-9            -- digits
@@ -59,7 +61,7 @@ tiger :-
   "|"         { mkL Or        }
   ":="        { mkL Assign    }
 
-  @int        { mkT (IntLit . read) }
+  @int        { mkT (IntLit . read . BL8.unpack) }
   @ident      { mkT Ident     }
   @stringlit  { mkT StringLit }
 
@@ -110,14 +112,14 @@ data Token
   | Assign
 
   | IntLit Int
-  | Ident String
-  | StringLit String
+  | Ident ByteString.ByteString
+  | StringLit ByteString.ByteString
   deriving (Eq, Show)
 
 
-mkT :: (String -> Token) -> AlexPosn -> String -> Loc Token
+mkT :: (ByteString.ByteString -> Token) -> AlexPosn -> ByteString.ByteString -> Loc Token
 mkT t (AlexPn absoff ln_no col_no) s = Loc (SrcPosn absoff ln_no col_no) (t s)
 
-mkL :: Token -> AlexPosn -> String -> Loc Token
+mkL :: Token -> AlexPosn -> ByteString.ByteString -> Loc Token
 mkL l = mkT (const l)
 }
