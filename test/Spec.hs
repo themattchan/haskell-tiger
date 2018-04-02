@@ -10,7 +10,7 @@ import Test.Tasty.HUnit
 
 import qualified Data.ByteString.Lazy as BL
 
-import Language.Tiger.MyParser
+import Language.Tiger.Parser
 
 main :: IO ()
 main = withCurrentDirectory "testcases" $ do
