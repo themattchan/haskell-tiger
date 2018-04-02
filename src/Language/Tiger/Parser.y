@@ -90,6 +90,9 @@ exp :: { Exp L }
    | array       { $1 }
    | assign      { $1 }
    | control     { $1 }
+   | 'nil'       { Nil (sp $1) }
+   | INT         { let Loc l (Tok.IntLit i) = $1 in Int i (sp l) }
+   | STRING      { let Loc l (Tok.StringLit s) = $1 in String s (sp l) }
 
 decs :: { [Decl L] }
   : {- nil -}  { [] }
@@ -150,8 +153,12 @@ control :: { Exp L }
   | 'let' decs 'in' expseq 'end'          { Let $2 (Seq $4 (foldMap sp $4)) (spr $1 $5) }
 
 expseq :: { [Exp L] }
-  : {- nil -}                   { []               }
-  | exp ';' expseq              { $1 : $3          }
+  : {- nil -}                   { []      } -- Q: are empty sequences allowed??
+  | exp expseq1                 { $1 : $2 }
+
+expseq1 :: { [Exp L] }
+  : {- nil -}                   { []      }
+  | ';' exp expseq1             { $2 : $3 }
 
 app :: { Exp L }
   : ID '(' args ')' { Call (sym $1) $3 ((sp $1)<> (sp $4)) }
@@ -208,7 +215,7 @@ fields :: { [(Symbol, Exp L, L)] }
   | ',' field1 fields { $2 : $3 }
 
 array :: { Exp L }
-  : ID '{' exp '}' 'of' exp  { Array (sym $1) $3 $6  (spr $1 $6) }
+  : ID '[' exp ']' 'of' exp  { Array (sym $1) $3 $6  (spr $1 $6) }
 
 
 {

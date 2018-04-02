@@ -35,20 +35,28 @@ data Op
   deriving (Show, Eq, Enum, Bounded)
 
 data Exp a
+  -- lvalue
   = Var (Var a)                                     a
   | Nil                                             a
   | Int Int                                         a
-  | String String                                   a
+  | String B.ByteString                             a
+  -- app
   | Call Symbol [Exp a]                             a
+  -- cmpexp, mathexp, boolexp
   | Op (Exp a) Op (Exp a)                           a
+  -- record
   | Record [(Symbol, Exp a, a)] Symbol              a
+  -- sequence
   | Seq [Exp a]                                     a
+  -- assign
   | Assign (Var a) (Exp a)                          a
+  -- control
   | If (Exp a) (Exp a) (Maybe (Exp a))              a
   | While (Exp a) (Exp a)                           a
   | For Symbol (Exp a) (Exp a) (Exp a)              a
   | Break                                           a
   | Let [Decl a] (Exp a)                            a
+  -- array
   | Array Symbol (Exp a) (Exp a)                    a
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
