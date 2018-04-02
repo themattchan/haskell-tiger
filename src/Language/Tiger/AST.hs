@@ -117,7 +117,8 @@ makeLenses ''Function
 
 -- * Annotations
 
-class Functor f => Ann f where
+-- is this comonad??
+class Ann f where
   ann :: f a -> a
 
 instance Ann Var where
@@ -159,3 +160,21 @@ instance Ann Ty where
 instance Ann Field where ann = fieldAnnot
 
 instance Ann Function where ann = funAnnot
+
+class HasSrcSpan a where
+  sp :: a -> SrcSpan
+
+instance HasSrcSpan SrcSpan where
+  sp = id
+
+instance HasSrcSpan SrcPosn where
+  sp = posnToSpan
+
+instance HasSrcSpan (Loc a) where
+  sp = posnToSpan . locPosn
+
+-- instance (Ann f) => HasSrcSpan (f SrcSpan) where
+--   sp = ann
+
+instance (Ann f, HasSrcSpan a) => HasSrcSpan (f a) where
+  sp = sp . ann

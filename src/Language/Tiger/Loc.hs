@@ -1,3 +1,4 @@
+-- | Source locations
 module Language.Tiger.Loc where
 
 import Data.Semigroup
@@ -37,3 +38,8 @@ spanSize ss = (srcSpanEndLine ss - srcSpanStartLine ss, max 0 (srcSpanEndCol ss 
 
 data Loc a = Loc { locPosn :: SrcPosn, locData :: a }
   deriving Show
+
+data Span a = Span { spanSpan :: SrcSpan, spanData :: a }
+
+instance Show a => Show (Span a) where
+  show (Span ss a) = show a <> " at location " <> show ss

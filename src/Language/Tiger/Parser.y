@@ -219,26 +219,11 @@ array :: { Exp L }
 
 
 {
-type P a = GensymT Int (Either String) a
+type P = GensymT Int (Either String)
 type L = SrcSpan
 
 parseError :: [Loc Tok.Token] -> P a
 parseError toks = lift $ Left $ "A parse error occurred\n\n " <> show toks
-
-class HasSrcSpan a where
-  sp :: a -> SrcSpan
-
-instance HasSrcSpan SrcSpan where
-  sp = id
-
-instance HasSrcSpan SrcPosn where
-  sp = posnToSpan
-
-instance HasSrcSpan (Loc a) where
-  sp = posnToSpan . locPosn
-
-instance (Ann f) => HasSrcSpan (f SrcSpan) where
-  sp = ann
 
 spr :: (HasSrcSpan x, HasSrcSpan y) => x -> y -> SrcSpan
 spr x y = sp x <> sp y

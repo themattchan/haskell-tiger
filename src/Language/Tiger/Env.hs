@@ -5,21 +5,20 @@ import Language.Tiger.Types
 import qualified Language.Tiger.Translate as Translate
 import qualified Language.Tiger.Temp as Temp
 import qualified Language.Tiger.Symtab as Symtab
-import Data.Foldable
 
-data EnvEntry a
+data EnvEntry
   = VarEntry
       { -- access :: Translate.Access
-        ty :: Ty a
+        ty :: Ty
       }
   | FunEntry
       { -- level :: Translate.Level
       -- , label :: Temp.Label
-       formals :: [Ty a]
-      , result :: Ty a
+       formals :: [Ty]
+      , result :: Ty
       }
 
-venv0 :: Symtab.Symtab (EnvEntry ())
+venv0 :: Symtab.Symtab EnvEntry
 venv0 = Symtab.fromList
   [ ("print", FunEntry [StringTy] UnitTy)
   , ("flush", FunEntry [] UnitTy)
@@ -33,8 +32,10 @@ venv0 = Symtab.fromList
   , ("exit", FunEntry [IntTy] UnitTy)
   ]
 
-tenv0 :: Symtab.Symtab (Ty ())
+tenv0 :: Symtab.Symtab Ty
 tenv0 = Symtab.fromList
   [ ("int", IntTy)
   , ("string", StringTy)
+  , ("unit", UnitTy)
+  , ("nil", NilTy)
   ]
