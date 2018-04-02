@@ -1,5 +1,10 @@
 {
-module Language.Tiger.Lexer (Token(..), alexScanTokens) where
+{-# LANGUAGE ScopedTypeVariables #-}
+module Language.Tiger.Lexer (lex) where
+import Control.Exception (SomeException, tryJust, evaluate)
+import System.IO.Unsafe
+import Prelude hiding (lex)
+
 import Language.Tiger.Loc
 import Language.Tiger.Token
 import qualified Data.ByteString.Lazy as ByteString
@@ -71,8 +76,11 @@ tiger :-
 {
 
 mkT :: (ByteString.ByteString -> Token) -> AlexPosn -> ByteString.ByteString -> Loc Token
-mkT t (AlexPn absoff ln_no col_no) s = Loc (SrcPosn absoff ln_no col_no) (t s)
+mkT t (AlexPn x y z) s = Loc (SrcPosn x y z) (t s)
 
 mkL :: Token -> AlexPosn -> ByteString.ByteString -> Loc Token
 mkL l = mkT (const l)
+
+lex :: ByteString.ByteString -> Either String [Loc Token]
+lex = unsafePerformIO . tryJust (\(e :: SomeException) -> Just (show e)) . evaluate . alexScanTokens
 }

@@ -1,16 +1,19 @@
 {
-module Language.Tiger.Parser where
+module Language.Tiger.Parser (parseProgram) where
 
+import Control.Monad
 import Data.Semigroup
 import Data.String
+import qualified Data.ByteString.Lazy as BS
 
-import Language.Tiger.Lexer (alexScanTokens)
+import Language.Tiger.Lexer as Lexer
 import qualified Language.Tiger.Token as Tok
 import Language.Tiger.Loc
 import Language.Tiger.Types
 }
 
-%name parseProgram program
+%name program
+%monad { Either String } { (>>=) } { return }
 %error { parseError }
 %tokentype { Loc Tok.Token }
 
@@ -211,9 +214,8 @@ array :: { Exp L }
 {
 type L = SrcSpan
 
-parseError :: [Loc Tok.Token] -> a
-parseError _ = error "A parse error occurred"
-
+parseError :: [Loc Tok.Token] -> Either String a
+parseError toks = error $ "A parse error occurred\n\n " <> show toks
 
 class HasSrcSpan a where
   sp :: a -> SrcSpan
@@ -234,5 +236,8 @@ spr :: (HasSrcSpan x, HasSrcSpan y) => x -> y -> SrcSpan
 spr x y = sp x <> sp y
 
 sym (Loc _ (Tok.Ident s)) = Sym s
+
+parseProgram :: BS.ByteString -> Either String (Exp L)
+parseProgram = program <=< Lexer.lex
 
 }
