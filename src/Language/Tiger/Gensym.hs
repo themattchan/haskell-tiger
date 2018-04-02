@@ -1,7 +1,9 @@
-{-# LANGUAGE DeriveFunctor, GeneralizedNewtypeDeriving, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses  #-}
+{-# LANGUAGE DeriveFunctor, GeneralizedNewtypeDeriving, FlexibleContexts,
+FlexibleInstances, MultiParamTypeClasses, FunctionalDependencies  #-}
 module Language.Tiger.Gensym
   ( Fresh                       -- do NOT export genzero and gennext
   , Gensym(..)
+--  , gensym
   , GensymT(..)
   , runGensymT
   ) where
@@ -22,14 +24,17 @@ instance Fresh Int where
 newtype GensymT s m a = GensymT { unGensymT :: StateT s m a }
   deriving (Functor, Applicative, Monad, MonadTrans, MonadIO)
 
-instance Monad m => MonadState s (GensymT s m) where
-  state = GensymT . state
+-- instance Monad m => MonadState s (GensymT s m) where
+--   state = GensymT . state
 
-class Gensym m where
-  gensym :: (MonadState s m, Fresh s) => m s
+-- class Gensym s m where
+--   gensym :: m s
 
-instance Gensym (GensymT s m) where
-  gensym = do
+class (Fresh s, Monad m) => Gensym s m | m -> s where
+  gensym :: m s
+
+instance  (Fresh s, Monad m) => Gensym s (GensymT s m) where
+  gensym = GensymT $ do
     s <- get
     modify gennext
     return s

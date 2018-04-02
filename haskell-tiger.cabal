@@ -22,6 +22,12 @@ library
                      , Language.Tiger.Gensym
                      , Language.Tiger.Symtab
                      , Language.Tiger.Semant
+                     , Language.Tiger.Env
+                     , Language.Tiger.IR
+                     , Language.Tiger.Loc
+                     , Language.Tiger.Temp
+                     , Language.Tiger.Translate
+                     , Language.Tiger.Access
   other-modules:       Language.Tiger.Lexer
                      , Language.Tiger.Parser
   build-tools:         alex

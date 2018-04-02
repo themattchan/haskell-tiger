@@ -30,4 +30,4 @@ data Binop
 
 data Relop
   = Eq | Ne | Lt | Gt | Le | Ge
-  | Ult | Ult | Ugt | Uge
+  | Ult | Ule | Ugt | Uge

@@ -15,12 +15,8 @@ import Control.Comonad
 import GHC.Generics
 import Data.String
 
-class Functor f => Ann f where
-  ann :: f a -> a
-
 newtype Symbol = Sym { symbol :: B.ByteString }
   deriving (Show, Eq, Generic, Hashable)
-
 
 instance IsString Symbol where
   fromString = Sym . B.pack
@@ -29,12 +25,7 @@ data Var a
   = SimpleVar Symbol                  a
   | FieldVar (Var a) Symbol           a
   | SubscriptVar (Var a) (Exp a)      a
-  deriving (Show, Eq, Functor, Foldable, Traversable, Ann)
-
--- instance Ann Var where
---   ann (SimpleVar _ a) = a
---   ann (FieldVar _ _ a) = a
---   ann (SubscriptVar _ _ ) = a
+  deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Op
   = Plus | Minus | Times | Divide
@@ -58,7 +49,7 @@ data Exp a
   | Break                                           a
   | Let [Decl a] (Exp a)                            a
   | Array Symbol (Exp a) (Exp a)                    a
-  deriving (Show, Eq, Functor, Foldable, Traversable, Comonad, Ann)
+  deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Decl a
   = FunctionDecl [Function a] a
@@ -71,11 +62,6 @@ data Decl a
   | TypeDecl [(Symbol, Ty a, a)] a
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
-instance Ann Decl where
-  ann (FunctionDecl _ a) = a
-  ann (VarDecl{meta}) = meta
-  ann (TypeDecl _ a) = a
-
 type Unique = Int
 
 data Ty a
@@ -86,7 +72,7 @@ data Ty a
   | IntTy                         a
   | StringTy                      a
   | UnitTy                        a
-  deriving (Show, Functor, Foldable, Traversable, Ann)
+  deriving (Show, Functor, Foldable, Traversable)
 
 instance Eq (Ty a) where
   UnitTy _ == UnitTy _ = True
@@ -106,9 +92,6 @@ data Field a
     , fieldAnnot  :: a
     } deriving (Show, Eq, Functor, Foldable, Traversable)
 
-instance Ann Field where ann = fieldAnnot
-
-
 data Function a
   = Function
     { funName   :: Symbol
@@ -118,7 +101,6 @@ data Function a
     , funAnnot  :: a
     } deriving (Show, Eq, Functor, Foldable, Traversable)
 
-instance Ann Function where ann = funAnnot
 
 
 -- * Lenses
@@ -131,3 +113,43 @@ makePrisms ''Decl
 makePrisms ''Ty
 makeLenses ''Field
 makeLenses ''Function
+
+-- * Annotations
+
+class Functor f => Ann f where
+  ann :: f a -> a
+
+instance Ann Exp where
+  ann (Var _       a) = a
+  ann (Nil         a) = a
+  ann (Int _       a) = a
+  ann (String _    a) = a
+  ann (Call _ _    a) = a
+  ann (Op _ _ _    a) = a
+  ann (Record _ _  a) = a
+  ann (Seq _       a) = a
+  ann (Assign _ _  a) = a
+  ann (If _ _ _    a) = a
+  ann (While _ _   a) = a
+  ann (For _ _ _ _ a) = a
+  ann (Break       a) = a
+  ann (Let _ _     a) = a
+  ann (Array _ _ _ a) = a
+
+instance Ann Decl where
+  ann (FunctionDecl _ a) = a
+  ann (VarDecl {meta=a}) = a
+  ann (TypeDecl _ a)     = a
+
+instance Ann Ty where
+  ann (NameTy _ _   a) = a
+  ann (RecordTy _ _ a) = a
+  ann (ArrayTy _ _  a) = a
+  ann (NilTy        a) = a
+  ann (IntTy        a) = a
+  ann (StringTy     a) = a
+  ann (UnitTy       a) = a
+
+instance Ann Field where ann = fieldAnnot
+
+instance Ann Function where ann = funAnnot
