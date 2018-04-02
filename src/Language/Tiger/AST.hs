@@ -35,29 +35,21 @@ data Op
   deriving (Show, Eq, Enum, Bounded)
 
 data Exp a
-  -- lvalue
-  = Var (Var a)                                     a
-  | Nil                                             a
-  | Int Int                                         a
-  | String B.ByteString                             a
-  -- app
-  | Call Symbol [Exp a]                             a
-  -- cmpexp, mathexp, boolexp
-  | Op (Exp a) Op (Exp a)                           a
-  -- record
-  | Record [(Symbol, Exp a, a)] Symbol              a
-  -- sequence
-  | Seq [Exp a]                                     a
-  -- assign
-  | Assign (Var a) (Exp a)                          a
-  -- control
-  | If (Exp a) (Exp a) (Maybe (Exp a))              a
-  | While (Exp a) (Exp a)                           a
-  | For Symbol (Exp a) (Exp a) (Exp a)              a
-  | Break                                           a
-  | Let [Decl a] (Exp a)                            a
-  -- array
-  | Array Symbol (Exp a) (Exp a)                    a
+  = Var (Var a)                                     a -- ^ lvalue
+  | Nil                                             a -- ^ exp (leaf)
+  | Int Int                                         a -- ^ exp (leaf)
+  | String B.ByteString                             a -- ^ exp (leaf)
+  | Call Symbol [Exp a]                             a -- ^ app
+  | Op (Exp a) Op (Exp a)                           a -- ^ cmpexp, mathexp, boolexp
+  | Record [(Symbol, Exp a, a)] Symbol              a -- ^ record
+  | Seq [Exp a]                                     a -- ^ sequence
+  | Assign (Var a) (Exp a)                          a -- ^ assign
+  | If (Exp a) (Exp a) (Maybe (Exp a))              a -- ^ control
+  | While (Exp a) (Exp a)                           a -- ^ control
+  | For Symbol (Exp a) (Exp a) (Exp a)              a -- ^ control
+  | Break                                           a -- ^ control
+  | Let [Decl a] (Exp a)                            a -- ^ control
+  | Array Symbol (Exp a) (Exp a)                    a -- ^ array
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Decl a
