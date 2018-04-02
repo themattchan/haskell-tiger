@@ -1,23 +1,26 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveFoldable    #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Language.Tiger.Types where
 
 import Control.Lens.TH (makeLenses, makePrisms)
-import qualified Data.ByteString.Strict as B
+import qualified Data.ByteString.Char8 as B
 import Data.Hashable
 import Control.Comonad
+import GHC.Generics
+import Data.String
 
 class Functor f => Ann f where
   ann :: f a -> a
 
 newtype Symbol = Sym { symbol :: B.ByteString }
-  deriving (Show, Eq, Hashable)
+  deriving (Show, Eq, Generic, Hashable)
 
-makeLenses ''Symbol
 
 instance IsString Symbol where
   fromString = Sym . B.pack
@@ -26,9 +29,7 @@ data Var a
   = SimpleVar Symbol                  a
   | FieldVar (Var a) Symbol           a
   | SubscriptVar (Var a) (Exp a)      a
-  deriving (Show, Functor, Foldable, Traversable, Ann)
-
-makePrisms ''Var
+  deriving (Show, Eq, Functor, Foldable, Traversable, Ann)
 
 -- instance Ann Var where
 --   ann (SimpleVar _ a) = a
@@ -40,8 +41,6 @@ data Op
   | Eq | Neq
   | Lt | Le | Gt | Ge
   deriving (Show, Eq, Enum, Bounded)
-
-makePrisms ''Op
 
 data Exp a
   = Var (Var a)                                     a
@@ -61,14 +60,12 @@ data Exp a
   | Array Symbol (Exp a) (Exp a)                    a
   deriving (Show, Eq, Functor, Foldable, Traversable, Comonad, Ann)
 
-makePrisms ''Exp
-
 data Decl a
   = FunctionDecl [Function a] a
   | VarDecl { name   :: Symbol
             , escape :: Bool
             , typ    :: Maybe (Symbol,a)
-            , init   :: Exp
+            , init   :: Exp a
             , meta   :: a
             }
   | TypeDecl [(Symbol, Ty a, a)] a
@@ -78,8 +75,6 @@ instance Ann Decl where
   ann (FunctionDecl _ a) = a
   ann (VarDecl{meta}) = meta
   ann (TypeDecl _ a) = a
-
-makePrisms ''Decl
 
 type Unique = Int
 
@@ -94,16 +89,14 @@ data Ty a
   deriving (Show, Functor, Foldable, Traversable, Ann)
 
 instance Eq (Ty a) where
-  UnitTy == UnitTy = True
-  StringTy == StringTy = True
-  IntTy == IntTy = True
-  NilTy == NilTy = True
+  UnitTy _ == UnitTy _ = True
+  StringTy _ == StringTy _ = True
+  IntTy _ == IntTy _  = True
+  NilTy _  == NilTy _ = True
   ArrayTy _ u _ == ArrayTy _ w _ = u == w
-  RecordTy _ u == RecordTy _ w = u == w
-  NameTy s t == NameTy s' t' = s == s' && t == t'
+  RecordTy _ u _ == RecordTy _ w _ = u == w
+  NameTy s t _ == NameTy s' t' _ = s == s' && t == t'
   _ == _ = False
-
-makePrisms ''Ty
 
 data Field a
   = Field
@@ -111,11 +104,10 @@ data Field a
 --    , fieldEscape :: Bool
     , fieldType   :: Symbol
     , fieldAnnot  :: a
-    } deriving (Show, Functor, Foldable, Traversable)
+    } deriving (Show, Eq, Functor, Foldable, Traversable)
 
 instance Ann Field where ann = fieldAnnot
 
-makeLenses ''Field
 
 data Function a
   = Function
@@ -124,7 +116,18 @@ data Function a
     , funResult :: Maybe (Symbol,a)
     , funBody   :: Exp a
     , funAnnot  :: a
-    } deriving (Show, Functor, Foldable, Traversable)
+    } deriving (Show, Eq, Functor, Foldable, Traversable)
 
-instance Ann Function where ann = functionAnnot
+instance Ann Function where ann = funAnnot
+
+
+-- * Lenses
+
+makeLenses ''Symbol
+makePrisms ''Var
+makePrisms ''Op
+makePrisms ''Exp
+makePrisms ''Decl
+makePrisms ''Ty
+makeLenses ''Field
 makeLenses ''Function

@@ -76,7 +76,6 @@ data Token
   | End
   | Function
 
-  | Var
   | Type
   | Array
   | If
@@ -116,9 +115,9 @@ data Token
   deriving (Eq, Show)
 
 
-
 mkT :: (String -> Token) -> AlexPosn -> String -> Loc Token
-mkT t p s = Loc p (t s)
+mkT t (AlexPn absoff ln_no col_no) s = Loc (SrcPosn absoff ln_no col_no) (t s)
 
-mkL l = mkT . const l
+mkL :: Token -> AlexPosn -> String -> Loc Token
+mkL l = mkT (const l)
 }

@@ -12,7 +12,7 @@ import Language.Tiger.Loc
 
 %token
   INT         { Loc _ (IntLit _) }
-  ID          { Loc _ (Ident _ ) }
+  ID          { Loc _ (Ident _ ) } -- FIXME this needs to be converted into Symbol
   STRING      { Loc _ (StringLit _ ) }
 
   'var'       { Loc $$ Var       }
@@ -24,7 +24,6 @@ import Language.Tiger.Loc
   'in'        { Loc $$ In        }
   'end'       { Loc $$ End       }
   'function'  { Loc $$ Function  }
-  'var'       { Loc $$ Var       }
   'type'      { Loc $$ Type      }
   'array'     { Loc $$ Array     }
   'if'        { Loc $$ If        }
@@ -57,12 +56,22 @@ import Language.Tiger.Loc
   '|'         { Loc $$ Or        }
   ':='        { Loc $$ Assign    }
 
+%right    'of'
+%nonassoc 'do'
+%nonassoc 'else'
+%nonassoc ':='
+%left     '&' '|'
+%nonassoc '=' '<>' '<' '<=' '>' '>='
+%left     '+' '-'
+%left     '*' '/'
+%left     UMINUS
+
 %%
 
-program :: { Exp AlexPosn }
+program :: { Exp L }
   : exp { $1 }
 
-exp :: { Exp AlexPosn }
+exp :: { Exp L }
    : lvalue      { $1 }
    | record      { $1 }
    | sequence    { $1 }
@@ -74,78 +83,80 @@ exp :: { Exp AlexPosn }
    | assign      { $1 }
    | control     { $1 }
 
-decs :: { [Decl AlexPosn] }
+decs :: { [Decl L] }
   : {- nil -}  { [] }
   | dec decs   { $1 : $2 }
 
-dec :: { Decl AlexPosn }
+dec :: { Decl L }
   : vardec  { $1 }
   | fundec  { Function [$1] (ann $1) }
   | tydec   { $1 }
 
-vardec :: { Decl AlexPosn }
+vardec :: { Decl L }
   : 'var' ID ':=' exp
      { VarDecl $1 True None      $4 (spanPos (ann $1) (ann $4)) }
   | 'var' ID ':' ID ':=' exp
      { VarDecl $1 True (Just $4) $6 (spanPos (ann $1) (ann $6)) }
 
-fundec :: { Function AlexPosn }
+fundec :: { Function L }
   : 'function' ID '(' tyfields ')' exp
      { Function $2 $4 None      $6 (spanPos (ann $1) (ann $6)) }
   | 'function' ID '(' tyfields ')' ':' ID exp
      { Function $2 $4 (Just $7) $8 (spanPos (ann $1) (ann $8)) }
 
-tyfields :: { [Field AlexPosn] }
+tyfields :: { [Field L] }
   : {- nil -} { [] }
   | tyfield1 tyfieldss { $1 : $2 }
 
-tyfield1 :: { Field AlexPosn }
+tyfield1 :: { Field L }
   : ID ':' ID { Field $1 $3 (spanPos (ann $1) (ann $3)) }
 
-tyfieldss :: { [Field AlexPosn] }
+tyfieldss :: { [Field L] }
   : {- nil -} { [] }
   | ',' tyfield1 tyfieldss { $2 : $3 }
 
-tydec :: { (Symbol, Ty AlexPosn, AlexPosn) }
+tydec :: { (Symbol, Ty L, L) }
   : 'type' ID '=' ty { ($2, $4, spanPos (ann $1) (ann $4)) }
 
-ty :: { Ty AlexPosn }
-  : ID { }
-  | '{' tyfields '}' { }
-  | 'array' 'of' ID { }
+ty :: { Ty L }
+  : ID                { NameTy $1 Nothing (ann $1) }
+  | '{' tyfields '}'  { RecordTy $2 (spanPos (ann $1) (ann $3)) }
+  | 'array' 'of' ID   { ArrayTy  $3 (spanPos (ann $1) (ann $3)) }
 
-lvalue :: {}
-  : ID lvalue1 {}
+lvalue :: { Var L }
+  : ID      { SimpleVar $1 (ann $1) }
+  | lvalue1 { $1 }
 
-lvalue1 :: {}
-  : {- nil -} {}
-  | '.' ID lvalue1 {}
-  | '[' exp ']' lvalue1 {}
+lvalue1 :: { Var L }
+  : ID '.' ID         { FieldVar (SimpleVar $1 (ann $1)) $3 (spanPos (ann $1) (ann $3)) }
+  | lvalue1 '.' ID    { FieldVar $1 $3 (spanPos (ann $1) (ann $3))  }
+  | ID '[' exp ']'    { SubscriptVar (SimpleVar $1 (ann $1)) $3 (spanPos (ann $1) (ann $4)) }
+  | lvalue1 '[' exp ']'  { SubscriptVar $1 $3 (spanPos (ann $1) (ann $4)) }
 
-control :: { Exp AlexPosn }
+control :: { Exp L }
   : 'if' exp 'then' exp 'else' exp        { If $2 $4 (Just $6)    (spanPos (ann $1) (ann $6)) }
-  | 'if' exp 'then' exp                   { If $2 $4  Nothing     (spanPos (ann $1) (ann $5)) }
+  | 'if' exp 'then' exp                   { If $2 $4  Nothing     (spanPos (ann $1) (ann $4)) }
   | 'while' exp 'do' exp                  { While $2 $4           (spanPos (ann $1) (ann $4)) }
   | 'for' ID ':=' exp 'to' exp 'do' exp   { For $2 False $4 $6 $8 (spanPos (ann $1) (ann $8)) }
   | 'break'                               { Break                 (ann $1) }
   | 'let' decs 'in' expseq 'end'          { Let $2 (Seq $4)       (spanPos (ann $1) (ann $5)) }
 
-expseq :: { [(Exp AlexPosn, AlexPosn)] }
+expseq :: { [(Exp L, L)] }
   : {- nil -}                   { []                      }
   | exp ';' expseq              { (($1,$2) : $3)          }
 
-app :: {}
-  : ID '(' args ')' { }
+app :: { Exp L }
+  : ID '(' args ')' { Call $1 $3 (spanPos (ann $1) (ann $4)) }
 
-args :: {}
-  : {- nil -}    { }
-  | exp moreargs { }
+args :: { [Exp L] }
+  : {- nil -}    { [] }
+  | exp moreargs { $1 : $2 }
 
-moreargs :: {}
-  : {- nil -}          { }
-  | ',' exp moreargs { }
+moreargs :: { [Exp L] }
+  : {- nil -}          { [] }
+  | ',' exp moreargs   { $2 : $3 }
 
-cmpexp :: { Exp AlexPosn }
+cmpexp :: { Exp L }
   : exp '='   exp   { Op $1 Eq      $3 (spanPos (ann $1) (ann $3))  }
   | exp '<>'  exp   { Op $1 Neq     $3 (spanPos (ann $1) (ann $3))  }
   | exp '>'   exp   { Op $1 Lt      $3 (spanPos (ann $1) (ann $3))  }
@@ -153,47 +164,47 @@ cmpexp :: { Exp AlexPosn }
   | exp '>='  exp   { Op $1 Le      $3 (spanPos (ann $1) (ann $3))  }
   | exp '<='  exp   { Op $1 Ge      $3 (spanPos (ann $1) (ann $3))  }
 
-mathexp :: { Exp AlexPosn }
+mathexp :: { Exp L }
   :     '-'  exp %prec UMINUS { Int (- $2 )      (spanPos (ann $1) (ann $2))  }
   | exp '+'  exp              { Op $1 Plus   $3  (spanPos (ann $1) (ann $3))  }
   | exp '-'  exp              { Op $1 Minus  $3  (spanPos (ann $1) (ann $3))  }
   | exp '*'  exp              { Op $1 Times  $3  (spanPos (ann $1) (ann $3))  }
   | exp '/'  exp              { Op $1 Divide $3  (spanPos (ann $1) (ann $3))  }
 
-boolexp :: { Exp AlexPosn }
+boolexp :: { Exp L }
   : exp '&' exp                 { Op $1 And    $3  (spanPos (ann $1) (ann $3)) }
   | exp '|' exp                 { Op $1 Or     $3  (spanPos (ann $1) (ann $3)) }
 
-assign :: { Exp AlexPosn }
-  : lvalue ':=' exp { }
+assign :: { Exp L }
+  : lvalue ':=' exp { Assign $1 $3 (spanPos (ann $1) (ann $3)) }
 
-sequence :: { Exp AlexPosn }
+sequence :: { Exp L }
   : '(' sequence1 ')' { Seq $2 $1 }
 
-sequence1 :: { [(Exp AlexPosn, AlexPosn)] }
+sequence1 :: { [(Exp L, L)] }
   : {- nil -}      { [] }
-  | exp sequence2  { }
+  | exp sequence2  { $1 : $2 }
 
-sequence2 :: { }
-  : {- nil -}         {}
-  | ';' exp sequence2 {}
+sequence2 :: { [ (Exp L, L) ] }
+  : {- nil -}         { [] }
+  | ';' exp sequence2 { $1 : $2 }
 
-record :: {}
-  : ID '{' field1 fields '}' {}
+record :: { Exp L }
+  : ID '{' field1 fields '}' { Record ($3:$4) $1 (spanPos (ann $1) (ann $5)) }
 
-field1 :: {}
-  : ID '=' exp {}
+field1 :: { (Symbol, Exp L, L) }
+  : ID '=' exp { ($1, $3, spanPos (ann $1) (ann $3)) }
 
-fields :: {}
-  : {- nil -}         {}
-  | ',' field1 fields {}
+fields :: { [(Symbol, Exp L, L)] }
+  : {- nil -}         { [] }
+  | ',' field1 fields { $1 : $2 }
 
-array :: { }
-  : ID '{' exp '}' OF exp  { }
+array :: { Exp L }
+  : ID '{' exp '}' 'of' exp  { Array $1 $3 $6 (spanPos (ann $1) (ann $6)) }
 
 
 {
-type L = AlexPosn
+type L = SrcPosn
 
 parseError :: [PosToken] -> a
 parseError _ = error "Parse error"
