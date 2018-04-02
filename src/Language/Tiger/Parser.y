@@ -215,7 +215,7 @@ array :: { Exp L }
 type L = SrcSpan
 
 parseError :: [Loc Tok.Token] -> Either String a
-parseError toks = error $ "A parse error occurred\n\n " <> show toks
+parseError toks = Left $ "A parse error occurred\n\n " <> show toks
 
 class HasSrcSpan a where
   sp :: a -> SrcSpan
