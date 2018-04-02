@@ -24,6 +24,10 @@ instance Semigroup SrcSpan where
   SrcSpan sl1 sc1 el1 ec1 <> SrcSpan sl2 sc2 el2 ec2
     = SrcSpan (min sl1 sl2) (min sc1 sc2) (max el1 el2) (max ec1 ec2)
 
+instance Monoid SrcSpan where
+  mempty = SrcSpan 0 0 0 0
+  mappend = (<>)
+
 spanSize :: SrcSpan -> (Int, Int)
 spanSize ss = (srcSpanEndLine ss - srcSpanStartLine ss, max 0 (srcSpanEndCol ss - srcSpanStartCol ss))
 

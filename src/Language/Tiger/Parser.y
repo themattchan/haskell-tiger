@@ -74,7 +74,7 @@ program :: { Exp L }
   : exp { $1 }
 
 exp :: { Exp L }
-   : lvalue      { $1 }
+   : lvalue      { Var $1 (sp $1) }
    | record      { $1 }
    | sequence    { $1 }
    | app         { $1 }
@@ -91,18 +91,18 @@ decs :: { [Decl L] }
 
 dec :: { Decl L }
   : vardec  { $1 }
-  | fundec  { Function [$1] (sp $1) }
-  | tydec   { $1 }
+  | fundec  { FunctionDecl [$1] (sp $1) }
+  | tydec   { TypeDecl     [$1] ((\(_,_,x) -> x) $1) }
 
 vardec :: { Decl L }
   : 'var' ID ':=' exp
-     { VarDecl (symb $2) True None      $4 (spr $1 $4) }
+     { VarDecl (symb $2) True Nothing      $4 (spr $1 $4) }
   | 'var' ID ':' ID ':=' exp
      { VarDecl (symb $2) True (Just (symb $4, sp $4)) $6 (spr $1 $6) }
 
 fundec :: { Function L }
   : 'function' ID '(' tyfields ')' exp
-     { Function (symb $2) $4 None      $6 (spr $1 $6) }
+     { Function (symb $2) $4 Nothing      $6 (spr $1 $6) }
   | 'function' ID '(' tyfields ')' ':' ID exp
      { Function (symb $2) $4 (Just (symb $7, sp $7)) $8 (spr $1 $8) }
 
@@ -122,8 +122,8 @@ tydec :: { (Symbol, Ty L, L) }
 
 ty :: { Ty L }
   : ID                { NameTy (symb $1) Nothing (sp $1) }
-  | '{' tyfields '}'  { RecordTy $2 (spr $1 $3) }
-  | 'array' 'of' ID   { ArrayTy  (symb $3) (spr $1 $3) }
+  | '{' tyfields '}'  { RecordTy $2 123456789 (spr $1 $3) } -- FIXME generate unique number
+  | 'array' 'of' ID   { ArrayTy  (symb $3) 123456789 (spr $1 $3) } -- FIXME generate unique number
 
 lvalue :: { Var L }
   : ID      { SimpleVar (symb $1) (sp $1) }
@@ -140,12 +140,12 @@ control :: { Exp L }
   | 'if' exp 'then' exp                   { If $2 $4  Nothing      (spr $1 $4) }
   | 'while' exp 'do' exp                  { While $2 $4            (spr $1 $4) }
   | 'for' ID ':=' exp 'to' exp 'do' exp   { For (symb $2) $4 $6 $8 (spr $1 $8) }
-  | 'break'                               { Break                  (sp $1) }
-  | 'let' decs 'in' expseq 'end'          { Let $2 (Seq $4)        (spr $1 $5) }
+  | 'break'                               { Break                  (sp $1)     }
+  | 'let' decs 'in' expseq 'end'          { Let $2 (Seq $4 (foldMap sp $4)) (spr $1 $5) }
 
-expseq :: { [(Exp L, L)] }
-  : {- nil -}                   { []                      }
-  | exp ';' expseq              { (($1,$2) : $3)          }
+expseq :: { [Exp L] }
+  : {- nil -}                   { []               }
+  | exp ';' expseq              { $1 : $3          }
 
 app :: { Exp L }
   : ID '(' args ')' { Call (symb $1) $3 ((sp $1)<> (sp $4)) }
@@ -167,7 +167,7 @@ cmpexp :: { Exp L }
   | exp '<='  exp   { Op $1 Ge      $3 (spr $1 $3)  }
 
 mathexp :: { Exp L }
-  :     '-'  exp %prec UMINUS { Int (- $2 )      (spr $1 $2)  }
+  :     '-'  exp %prec UMINUS { Op (Int (-1) mempty) Times $2 (spr $1 $2)  }
   | exp '+'  exp              { Op $1 Plus   $3  (spr $1 $3)  }
   | exp '-'  exp              { Op $1 Minus  $3  (spr $1 $3)  }
   | exp '*'  exp              { Op $1 Times  $3  (spr $1 $3)  }
@@ -208,8 +208,9 @@ array :: { Exp L }
 {
 type L = SrcSpan
 
--- parseError :: [PosToken] -> a
--- parseError _ = error "Parse error"
+happyError :: [Loc Tok.Token] -> a
+happyError _ = error "A parse error occurred"
+
 
 class HasSrcSpan a where
   sp :: a -> SrcSpan
