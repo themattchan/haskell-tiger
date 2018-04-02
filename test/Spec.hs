@@ -26,4 +26,6 @@ testParser :: FilePath -> TestTree
 testParser file = testCase file $ do
   src <- BL.readFile file
   let p = parseProgram src
-  assertBool (either id show p) (isRight p)
+  assertBool (either id show p) ((if file `elem` bads then isLeft else isRight) p)
+  where
+    bads = ["test49.tig"]

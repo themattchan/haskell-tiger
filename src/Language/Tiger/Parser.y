@@ -197,7 +197,11 @@ sequence2 :: { [Exp L] }
   | ';' exp sequence2 { $2 : $3 }
 
 record :: { Exp L }
-  : ID '{' field1 fields '}' { Record ($3:$4) (sym $1) (spr $1 $5) }
+  : ID '{' fields0 '}' { Record $3 (sym $1) (spr $1 $4) }
+
+fields0 :: { [(Symbol, Exp L, L)] }
+  : {- nil -}     { [] }
+  | field1 fields { $1 : $2 }
 
 field1 :: { (Symbol, Exp L, L) }
   : ID '=' exp { (sym $1, $3, (spr $1 $3)) }
