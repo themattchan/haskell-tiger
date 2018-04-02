@@ -1,4 +1,5 @@
 {
+{-# LANGUAGE OverloadedStrings #-}
 module Language.Tiger.Parser (parseProgram) where
 
 import Control.Monad
@@ -130,7 +131,14 @@ tydec :: { (Symbol, Ty L, L) }
   : 'type' ID '=' ty { (sym $2, $4, (spr $1 $4)) }
 
 ty :: { Ty L }
-  : ID                { NameTy (sym $1) Nothing (sp $1) }
+  : ID                { let Loc l (Tok.Ident n) = $1
+                        in case n of
+                          "int"    -> IntTy (sp l)
+                          "string" -> StringTy (sp l)
+                          "unit"   -> UnitTy (sp l)
+                          _        -> NameTy (Sym n) Nothing (sp l)
+                      }
+  | 'nil'             { NilTy (sp $1) }
   | '{' tyfields '}'  { RecordTy $2 123456789 (spr $1 $3) } -- FIXME generate unique number
   | 'array' 'of' ID   { ArrayTy  (sym $3) 123456789 (spr $1 $3) } -- FIXME generate unique number
 
