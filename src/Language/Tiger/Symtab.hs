@@ -5,6 +5,7 @@ module Language.Tiger.Symtab
   , empty
   , insert
   , lookup
+  , fromList
   ) where
 
 import Prelude hiding (lookup)
@@ -24,3 +25,6 @@ insert = HM.insert
 
 lookup :: Symbol -> Symtab a -> Maybe a
 lookup = HM.lookup
+
+fromList :: [(Symbol, a)] -> Symtab a
+fromList = HM.fromList

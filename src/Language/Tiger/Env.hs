@@ -1,16 +1,26 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Language.Tiger.Env where
 import Language.Tiger.Types
 import qualified Language.Tiger.Translate as Translate
 import qualified Language.Tiger.Temp as Temp
+import qualified Language.Tiger.Symtab as Symtab
+import Data.Foldable
 
-{-
-data Env
-  = VarTy { access :: Translate.Access, ty :: Ty }
-  | FunTy { level :: Translate.Level, label :: Temp.Label
-          , formals :: [Ty], result :: Ty }
+data EnvEntry a
+  = VarEntry
+      { -- access :: Translate.Access
+        ty :: Ty a
+      }
+  | FunEntry
+      { -- level :: Translate.Level
+      -- , label :: Temp.Label
+       formals :: [Ty a]
+      , result :: Ty a
+      }
 
-venv0 :: Symtab.Symtab Env
-venv0 = fromList
+venv0 :: Symtab.Symtab (EnvEntry ())
+venv0 = Symtab.fromList
   [ ("print", FunEntry [StringTy] UnitTy)
   , ("flush", FunEntry [] UnitTy)
   , ("getchar", FunEntry [] StringTy)
@@ -23,9 +33,8 @@ venv0 = fromList
   , ("exit", FunEntry [IntTy] UnitTy)
   ]
 
-tenv0 :: Symtab.Symtab Ty
-tenv0 = fromList
+tenv0 :: Symtab.Symtab (Ty ())
+tenv0 = Symtab.fromList
   [ ("int", IntTy)
   , ("string", StringTy)
   ]
--}

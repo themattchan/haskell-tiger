@@ -20,6 +20,7 @@ library
   exposed-modules:     Language.Tiger
                      , Language.Tiger.Loc
                      , Language.Tiger.Token
+                     , Language.Tiger.AST
                      , Language.Tiger.Types
                      , Language.Tiger.Gensym
                      , Language.Tiger.Symtab

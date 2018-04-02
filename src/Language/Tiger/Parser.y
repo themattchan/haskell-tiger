@@ -3,6 +3,7 @@
 module Language.Tiger.Parser (parseProgram) where
 
 import Control.Monad
+import Control.Monad.Trans.Class
 import Data.Semigroup
 import Data.String
 import qualified Data.ByteString.Lazy as BS
@@ -10,11 +11,12 @@ import qualified Data.ByteString.Lazy as BS
 import Language.Tiger.Lexer as Lexer
 import qualified Language.Tiger.Token as Tok
 import Language.Tiger.Loc
-import Language.Tiger.Types
+import Language.Tiger.AST
+import Language.Tiger.Gensym
 }
 
 %name program
-%monad { Either String } { (>>=) } { return }
+%monad { P } { (>>=) } { return }
 %error { parseError }
 %tokentype { Loc Tok.Token }
 
@@ -131,16 +133,10 @@ tydec :: { (Symbol, Ty L, L) }
   : 'type' ID '=' ty { (sym $2, $4, (spr $1 $4)) }
 
 ty :: { Ty L }
-  : ID                { let Loc l (Tok.Ident n) = $1
-                        in case n of
-                          "int"    -> IntTy (sp l)
-                          "string" -> StringTy (sp l)
-                          "unit"   -> UnitTy (sp l)
-                          _        -> NameTy (Sym n) Nothing (sp l)
-                      }
-  | 'nil'             { NilTy (sp $1) }
-  | '{' tyfields '}'  { RecordTy $2 123456789 (spr $1 $3) } -- FIXME generate unique number
-  | 'array' 'of' ID   { ArrayTy  (sym $3) 123456789 (spr $1 $3) } -- FIXME generate unique number
+  : ID                { NameTy (sym $1) Nothing (sp $1) }
+--  | 'nil'             { NilTy (sp $1) }
+  | '{' tyfields '}'  {% gensym >>= \s -> return $ RecordTy $2 s (spr $1 $3) }
+  | 'array' 'of' ID   {% gensym >>= \s -> return $ ArrayTy  (sym $3) s (spr $1 $3) }
 
 lvalue :: { Var L }
   : ID      { SimpleVar (sym $1) (sp $1) }
@@ -223,10 +219,11 @@ array :: { Exp L }
 
 
 {
+type P a = GensymT Int (Either String) a
 type L = SrcSpan
 
-parseError :: [Loc Tok.Token] -> Either String a
-parseError toks = Left $ "A parse error occurred\n\n " <> show toks
+parseError :: [Loc Tok.Token] -> P a
+parseError toks = lift $ Left $ "A parse error occurred\n\n " <> show toks
 
 class HasSrcSpan a where
   sp :: a -> SrcSpan
@@ -249,6 +246,6 @@ spr x y = sp x <> sp y
 sym (Loc _ (Tok.Ident s)) = Sym s
 
 parseProgram :: BS.ByteString -> Either String (Exp L)
-parseProgram = program <=< Lexer.lex
+parseProgram = runGensymT . program <=< Lexer.lex
 
 }

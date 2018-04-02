@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, TupleSections, OverloadedStrings #-}
 
--- | Type checking and translation to intermediate code
+-- | Chapter 5: Semantic analysis
+-- Type checking and translation to intermediate code
 module Language.Tiger.Semant where
 
 import Data.List
@@ -8,6 +9,7 @@ import Data.List
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Class
+import Control.Monad.Error.Class
 import Control.Monad.State.Lazy
 import Control.Monad.Writer.Lazy
 
@@ -16,8 +18,13 @@ import Language.Tiger.Gensym
 import qualified Language.Tiger.Env as Env
 import qualified Language.Tiger.Symtab as Symtab
 
-data TransError = TypeMismatch | TypeUndefined | NoHOF | UnboundVariable
-                | NoSuchField
+data TransError
+  = TypeMismatch
+  | TypeUndefined
+  | NoHOF
+  | UnboundVariable
+  | NoSuchField
+  deriving Show
 
 transVar :: MonadError TransError m
          => Symtab.Symtab Env.Env -> Symtab.Symtab (Ty ())
