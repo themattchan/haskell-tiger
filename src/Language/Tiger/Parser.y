@@ -5,7 +5,7 @@ import Data.Semigroup
 import Data.String
 
 import Language.Tiger.Lexer (alexScanTokens)
-import qualified Language.Tiger.Lexer as Tok (Token(..))
+import qualified Language.Tiger.Token as Tok
 import Language.Tiger.Loc
 import Language.Tiger.Types
 }
