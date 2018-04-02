@@ -22,7 +22,10 @@ posnToSpan :: SrcPosn -> SrcSpan
 posnToSpan (SrcPosn _ sl sc) = SrcSpan sl sc sl sc
 
 instance Semigroup SrcSpan where
-  SrcSpan sl1 sc1 el1 ec1 <> SrcSpan sl2 sc2 el2 ec2
+  x@(SrcSpan sl1 sc1 el1 ec1) <> y@(SrcSpan sl2 sc2 el2 ec2)
+    | x == mempty = y
+    | y == mempty = x
+    | otherwise
     = SrcSpan (min sl1 sl2) (min sc1 sc2) (max el1 el2) (max ec1 ec2)
 
 instance Monoid SrcSpan where
