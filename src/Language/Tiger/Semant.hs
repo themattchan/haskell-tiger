@@ -15,7 +15,7 @@ import Control.Monad.Reader.Class (MonadReader(..))
 import Control.Monad.Reader (ReaderT(..))
 import Control.Monad.Writer.Class (MonadWriter(..))
 import Control.Monad.Writer.Lazy (WriterT(..))
-
+import Data.Functor.Identity
 import qualified Data.Sequence as Seq
 
 import Language.Tiger.AST hiding (Ty(..))
@@ -49,8 +49,9 @@ instance Show TransError where
 newtype MultipleErrors = MultipleErrors
   { runMultipleErrors :: Seq.Seq (Span TransError) }
 
-emitError :: (HasSrcSpan a, MonadWriter MultipleErrors m) => a -> TransError -> m ()
-emitError ss err = tell (Span (sp ss) err)
+emitError :: (HasSrcSpan a, MonadWriter MultipleErrors m)
+          => a -> TransError -> m ()
+emitError = tell . Seq.singleton . Span . sp
 
 -- | Variable environment
 type VEnv = Symtab.Symtab Env.EnvEntry
@@ -58,20 +59,30 @@ type VEnv = Symtab.Symtab Env.EnvEntry
 -- | Typing environment
 type TEnv = Symtab.Symtab Ty
 
-type CheckConstraints m a = ( HasSrcSpan a
-                            , MonadWriter MultipleErrors m
-                            , MonadError MultipleErrors m
-                            , MonadReader (VEnv, TEnv) m
-                            )
+type CheckConstraints m a =
+  ( HasSrcSpan a
+  , MonadWriter MultipleErrors m
+  , MonadError MultipleErrors m
+  , MonadReader (VEnv, TEnv) m
+  )
 
-type CheckM = ExceptT MultipleErrors (WriterT MultipleErrors (ReaderT (VEnv, TEnv) Identity))
---runCheckM = runWriterT . runExceptT
+type CheckM = (ExceptT MultipleErrors -- can probably get rid of this...
+               (WriterT MultipleErrors
+                 (ReaderT (VEnv, TEnv)
+                   Identity)))
 
-lookupV :: (MonadReader (VEnv,TEnv) m) => Symbol -> EnvEntry
-lookupV n = flip Symtab.lookup n <$> asks fst
+runCheckM :: CheckM a -> Either MultipleErrors a
+runCheckM = fmap fst
+          . runIdentity
+          . runReaderT (Symtab.venv0, Symtab.tenv0)
+          . runWriterT
+          . runExceptT
 
-lookupT :: (MonadReader (VEnv,TEnv) m) => Symbol -> Ty
-lookupT t = flip Symtab.lookup t <$> asks snd
+lookupV :: (MonadReader (VEnv,TEnv) m) => Symbol -> m (Maybe EnvEntry)
+lookupV n = Symtab.lookup n <$> asks fst
+
+lookupT :: (MonadReader (VEnv,TEnv) m) => Symbol -> m (Maybe Ty)
+lookupT t = Symtab.lookup t <$> asks snd
 
 transProg :: CheckConstraints m a
           -> Exp a -> m ()
