@@ -110,10 +110,10 @@ vardec :: { Decl L }
      { VarDecl (sym $2) True (Just (sym $4, sp $4)) $6 (spr $1 $6) }
 
 fundec :: { Function L }
-  : 'function' ID '(' tyfields ')' exp
-     { Function (sym $2) $4 Nothing      $6 (spr $1 $6) }
-  | 'function' ID '(' tyfields ')' ':' ID exp
-     { Function (sym $2) $4 (Just (sym $7, sp $7)) $8 (spr $1 $8) }
+  : 'function' ID '(' tyfields ')' '=' exp
+     { Function (sym $2) $4 Nothing      $7 (spr $1 $7) }
+  | 'function' ID '(' tyfields ')' ':' ID '=' exp
+     { Function (sym $2) $4 (Just (sym $7, sp $7)) $9 (spr $1 $9) }
 
 tyfields :: { [Field L] }
   : {- nil -} { [] }
@@ -150,15 +150,7 @@ control :: { Exp L }
   | 'while' exp 'do' exp                  { While $2 $4            (spr $1 $4) }
   | 'for' ID ':=' exp 'to' exp 'do' exp   { For (sym $2) $4 $6 $8 (spr $1 $8) }
   | 'break'                               { Break                  (sp $1)     }
-  | 'let' decs 'in' expseq 'end'          { Let $2 (Seq $4 (foldMap sp $4)) (spr $1 $5) }
-
-expseq :: { [Exp L] }
-  : {- nil -}                   { []      } -- Q: are empty sequences allowed??
-  | exp expseq1                 { $1 : $2 }
-
-expseq1 :: { [Exp L] }
-  : {- nil -}                   { []      }
-  | ';' exp expseq1             { $2 : $3 }
+  | 'let' decs 'in' sequence1 'end'       { Let $2 (Seq $4 (foldMap sp $4)) (spr $1 $5) }
 
 app :: { Exp L }
   : ID '(' args ')' { Call (sym $1) $3 ((sp $1)<> (sp $4)) }
@@ -181,14 +173,14 @@ cmpexp :: { Exp L }
 
 mathexp :: { Exp L }
   :     '-'  exp %prec UMINUS { Op (Int (-1) mempty) Times $2 (spr $1 $2)  }
-  | exp '+'  exp              { Op $1 Plus   $3  (spr $1 $3)  }
-  | exp '-'  exp              { Op $1 Minus  $3  (spr $1 $3)  }
-  | exp '*'  exp              { Op $1 Times  $3  (spr $1 $3)  }
-  | exp '/'  exp              { Op $1 Divide $3  (spr $1 $3)  }
+  | exp '+'  exp              { Op $1 Plus   $3  (spr $1 $3) }
+  | exp '-'  exp              { Op $1 Minus  $3  (spr $1 $3) }
+  | exp '*'  exp              { Op $1 Times  $3  (spr $1 $3) }
+  | exp '/'  exp              { Op $1 Divide $3  (spr $1 $3) }
 
 boolexp :: { Exp L }
-  : exp '&' exp                 { Op $1 And    $3  (spr $1 $3) }
-  | exp '|' exp                 { Op $1 Or     $3  (spr $1 $3) }
+  : exp '&' exp               { Op $1 And    $3  (spr $1 $3) }
+  | exp '|' exp               { Op $1 Or     $3  (spr $1 $3) }
 
 assign :: { Exp L }
   : lvalue ':=' exp { Assign $1 $3 (spr $1 $3) }
