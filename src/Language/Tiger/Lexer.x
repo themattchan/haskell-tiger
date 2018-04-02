@@ -18,7 +18,7 @@ $alpha = [$lower $upper]       -- alphabetic characters
 
 tiger :-
   $white+               ;
-  "--".*                ;
+  "//"[^\n]*            ;
   "/*" ([[. \n] # \*] | \* [[. \n] # \/])* ("*")+ "/" ;
 
   var         { mkL Var       }
