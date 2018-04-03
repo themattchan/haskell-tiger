@@ -4,7 +4,8 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Tiger.AST where
 
@@ -14,6 +15,7 @@ import Data.Hashable
 import Control.Comonad
 import GHC.Generics
 import Data.String
+import Language.Tiger.Loc
 
 newtype Symbol = Sym { symbol :: B.ByteString }
   deriving (Show, Eq, Generic, Hashable)
@@ -62,27 +64,11 @@ data Decl a
   | TypeDecl [(Symbol, Ty a, a)] a
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
-type Unique = Int
-
 data Ty a
-  = NameTy Symbol (Maybe (Ty a))  a
-  | RecordTy [Field a] Unique     a
-  | ArrayTy Symbol Unique         a
-  -- | NilTy                         a
-  -- | IntTy                         a
-  -- | StringTy                      a
-  -- | UnitTy                        a
-  deriving (Show, Functor, Foldable, Traversable)
-
-instance Eq (Ty a) where
-  -- UnitTy _ == UnitTy _ = True
-  -- StringTy _ == StringTy _ = True
-  -- IntTy _ == IntTy _  = True
-  -- NilTy _  == NilTy _ = True
-  ArrayTy _ u _ == ArrayTy _ w _ = u == w
-  RecordTy _ u _ == RecordTy _ w _ = u == w
-  NameTy s t _ == NameTy s' t' _ = s == s' && t == t'
-  _ == _ = False
+  = NameTy Symbol  a
+  | RecordTy [Field a] a
+  | ArrayTy Symbol a
+  deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Field a
   = Field
@@ -148,17 +134,15 @@ instance Ann Decl where
   ann (TypeDecl _ a)     = a
 
 instance Ann Ty where
-  ann (NameTy _ _   a) = a
-  ann (RecordTy _ _ a) = a
-  ann (ArrayTy _ _  a) = a
-  -- ann (NilTy        a) = a
-  -- ann (IntTy        a) = a
-  -- ann (StringTy     a) = a
-  -- ann (UnitTy       a) = a
+  ann (NameTy _ a)   = a
+  ann (RecordTy _ a) = a
+  ann (ArrayTy _ a)  = a
 
-instance Ann Field where ann = fieldAnnot
+instance Ann Field where
+  ann = fieldAnnot
 
-instance Ann Function where ann = funAnnot
+instance Ann Function where
+  ann = funAnnot
 
 class HasSrcSpan a where
   sp :: a -> SrcSpan
@@ -172,8 +156,7 @@ instance HasSrcSpan SrcPosn where
 instance HasSrcSpan (Loc a) where
   sp = posnToSpan . locPosn
 
--- instance (Ann f) => HasSrcSpan (f SrcSpan) where
---   sp = ann
-
-instance (Ann f, HasSrcSpan a) => HasSrcSpan (f a) where
+-- instance (Ann f, HasSrcSpan a) => HasSrcSpan (f a) where
+--   sp = sp . ann
+instance (Ann f) => HasSrcSpan (f SrcSpan) where
   sp = sp . ann

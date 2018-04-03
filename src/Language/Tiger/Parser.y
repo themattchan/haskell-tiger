@@ -3,7 +3,7 @@
 module Language.Tiger.Parser (parseProgram) where
 
 import Control.Monad
-import Control.Monad.Trans.Class
+-- import Control.Monad.Trans.Class
 import Data.Semigroup
 import Data.String
 import qualified Data.ByteString.Lazy as BS
@@ -67,11 +67,13 @@ import Language.Tiger.Gensym
   '|'         { Loc $$ Tok.Or        }
   ':='        { Loc $$ Tok.Assign    }
 
+-- precedence: low to high
 %right    'of'
 %nonassoc 'do'
 %nonassoc 'else'
 %nonassoc ':='
-%left     '&' '|'
+%left     '|'
+%left     '&'
 %nonassoc '=' '<>' '<' '<=' '>' '>='
 %left     '+' '-'
 %left     '*' '/'
@@ -93,6 +95,7 @@ exp :: { Exp L }
    | array       { $1 }
    | assign      { $1 }
    | control     { $1 }
+   | '(' exp ')' { $2 }
    | 'nil'       { Nil (sp $1) }
    | INT         { let Loc l (Tok.IntLit i) = $1 in Int i (sp l) }
    | STRING      { let Loc l (Tok.StringLit s) = $1 in String s (sp l) }
@@ -104,7 +107,7 @@ decs :: { [Decl L] }
 dec :: { Decl L }
   : vardec  { $1 }
   | fundecs  { FunctionDecl $1 (foldMap sp $1) }
-  | tydecs   { TypeDecl     $1 (foldMap (\(_,_,x) -> x) $1) }
+  | tydecs   { TypeDecl     $1 (foldMap (\ (_,_,x) -> x) $1) }
 
 vardec :: { Decl L }
   : 'var' ID ':=' exp
@@ -147,10 +150,9 @@ tydec :: { (Symbol, Ty L, L) }
   : 'type' ID '=' ty { (sym $2, $4, (spr $1 $4)) }
 
 ty :: { Ty L }
-  : ID                { NameTy (sym $1) Nothing (sp $1) }
---  | 'nil'             { NilTy (sp $1) }
-  | '{' tyfields '}'  {% gensym >>= \s -> return $ RecordTy $2 s (spr $1 $3) }
-  | 'array' 'of' ID   {% gensym >>= \s -> return $ ArrayTy  (sym $3) s (spr $1 $3) }
+  : ID                { NameTy (sym $1) (sp $1) }
+  | '{' tyfields '}'  { RecordTy $2 (spr $1 $3) }
+  | 'array' 'of' ID   { ArrayTy (sym $3) (spr $1 $3) }
 
 lvalue :: { Var L }
   : ID      { SimpleVar (sym $1) (sp $1) }
@@ -190,15 +192,15 @@ cmpexp :: { Exp L }
   | exp '<='  exp   { Op $1 Ge      $3 (spr $1 $3)  }
 
 mathexp :: { Exp L }
-  :     '-'  exp %prec UMINUS { Op (Int (-1) mempty) Times $2 (spr $1 $2)  }
+  :         '-'  exp %prec UMINUS { Op (Int (-1) mempty) Times $2 (spr $1 $2)  }
   | exp '+'  exp              { Op $1 Plus   $3  (spr $1 $3) }
   | exp '-'  exp              { Op $1 Minus  $3  (spr $1 $3) }
   | exp '*'  exp              { Op $1 Times  $3  (spr $1 $3) }
   | exp '/'  exp              { Op $1 Divide $3  (spr $1 $3) }
 
 boolexp :: { Exp L }
-  : exp '&' exp               { If $1 $3 (Int 0 mempty) (spr $1 $3) }
-  | exp '|' exp               { If $1 (Int 1 mempty) $3 (spr $1 $3) }
+  : exp '&' exp               { If $1 $3 (Just (Int 0 mempty)) (spr $1 $3) }
+  | exp '|' exp               { If $1 (Int 1 mempty) (Just $3) (spr $1 $3) }
 
 assign :: { Exp L }
   : lvalue ':=' exp { Assign $1 $3 (spr $1 $3) }
@@ -233,11 +235,11 @@ array :: { Exp L }
 
 
 {
-type P = GensymT Int (Either String)
+type P = Either String
 type L = SrcSpan
 
 parseError :: [Loc Tok.Token] -> P a
-parseError toks = lift $ Left $ "A parse error occurred\n\n " <> show toks
+parseError toks = Left $ "A parse error occurred\n\n " <> show toks
 
 spr :: (HasSrcSpan x, HasSrcSpan y) => x -> y -> SrcSpan
 spr x y = sp x <> sp y
@@ -245,6 +247,6 @@ spr x y = sp x <> sp y
 sym (Loc _ (Tok.Ident s)) = Sym s
 
 parseProgram :: BS.ByteString -> Either String (Exp L)
-parseProgram = runGensymT . program <=< Lexer.lex
+parseProgram = program <=< Lexer.lex
 
 }

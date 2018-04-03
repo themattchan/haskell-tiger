@@ -15,6 +15,7 @@ import Control.Monad.Reader.Class (MonadReader(..))
 import Control.Monad.Reader (ReaderT(..))
 import Control.Monad.Writer.Class (MonadWriter(..))
 import Control.Monad.Writer.Lazy (WriterT(..))
+import Control.Monad.Tardis (TardisT(..))
 import Data.Functor.Identity
 import qualified Data.Sequence as Seq
 
@@ -27,31 +28,49 @@ import qualified Language.Tiger.Env as Env
 import qualified Language.Tiger.Symtab as Symtab
 
 data TransError
-  = TypeMismatch Ty Ty
+  = NamedTypeMismatch Symbol (Either TyC Ty) Ty
+  | TypeMismatch Ty Ty
   | TypeUndefined Symbol
   | NoHOF
   | UnboundVariable Symbol
   | NoSuchField Symbol Symbol Ty
+  | BreakOutsideLoop
 
 instance Show TransError where
   show = \case
-    TypeMismatch expect actual
-      -> "Type mismatch: expected " <> show expect <> " got " <> show actual
-    TypeUndefined ty
-      -> "Undefined type: " <> show ty
-    NoHOF
-      -> "Higher order functions not implemented"
-    UnboundVariable v
-      -> "Unbound variable: " <> show v
-    NoSuchField fld r rt
-      -> "No field named " <> show fld <> " in record " <> show r <> " of type " <> show rt
+    NamedTypeMismatch symb expect actual ->
+      "Type mismatch: "
+      <> show symb <> " is a "
+      <> show actual <> " not a "
+      <> either show show expect
+    TypeMismatch expect actual ->
+      "Type mismatch: expected " <> show expect <> " got " <> show actual
+    TypeUndefined ty ->
+      "Undefined type: " <> show ty
+    NoHOF ->
+      "Higher order functions not implemented"
+    UnboundVariable v ->
+      "Unbound variable: " <> show v
+    NoSuchField fld r rt ->
+      "No field named " <> show fld <> " in record " <> show r <> " of type " <> show rt
+    BreakOutsideLoop ->
+      "break statement outside loop"
 
 newtype MultipleErrors = MultipleErrors
   { runMultipleErrors :: Seq.Seq (Span TransError) }
 
-emitError :: (HasSrcSpan a, MonadWriter MultipleErrors m)
-          => a -> TransError -> m ()
-emitError = tell . Seq.singleton . Span . sp
+-- | log an error and keep going
+nonfatal :: (HasSrcSpan a, MonadWriter MultipleErrors m)
+         => a -> TransError -> m ()
+nonfatal = tell . Seq.singleton . Span . sp
+
+-- | log an error and halt
+fatal :: (HasSrcSpan a, MonadWriter MultipleErrors m, MonadError MultipleErrors m)
+      => a -> TransError -> m ()
+fatal ann err = do
+  nonfatal ann err
+  errs <- ask
+  throwError errs
 
 -- | Variable environment
 type VEnv = Symtab.Symtab Env.EnvEntry
@@ -96,130 +115,170 @@ transProg e = do
 
 transVar :: CheckConstraints m a
          => VEnv -> TEnv
-         -> Var a -> m (Exp (Ty, a))
+         -> Var a -> m (Var (Ty, a))
 transVar venv tenv = \case
-  SimpleVar varName a
-    -> Symtab.lookupV varName >>= \case
-         Just (VarTy ty) -> pure (Var var (ty, a))
-         Just _ -> emitError a NoHOF
-         Nothing -> emitError a UnboundVariable
+  SimpleVar varName a ->
+    Symtab.lookupV varName >>= \case
+      Just (VarTy ty) -> pure (Var var (ty, a))
+      Just _ -> nonfatal a NoHOF
+         Nothing -> nonfatal a UnboundVariable
 
-  FieldVar recVar fieldName a
-    -> do
-      Var _ (ty, _)  <- transVar venv tenv recVar
-      case ty of
-        RecordTy fields _ _ -> case lookup fieldName fields of
-          Just fieldTy -> undefined
-          Nothing -> emitError a NoSuchField
-        _ -> emitError a TypeUndefined
+  FieldVar recVar fieldName a ->
+    do Var _ (ty, _)  <- transVar venv tenv recVar
+       case ty of
+         RecordTy fields _ _ -> case lookup fieldName fields of
+           Just fieldTy -> undefined
+           Nothing -> nonfatal a NoSuchField
+         _ -> fatal a TypeUndefined
 
-  SubscriptVar var1 exp1 a
-    -> do
-      Var _ (ty, _)  <- transVar venv tenv recVar
-      undefined
+  SubscriptVar var1 exp1 a ->
+    do Var _ (ty, _)  <- transVar venv tenv recVar
+        undefined
 
 annotTy :: Ty -> Exp a -> Exp (Ty, a)
 annotTy t e = (t, ) <$> e
 
-getTy :: Exp (Ty, a) -> Ty
+getTy :: Ann f => f (Ty, a) -> Ty
 getTy = fst . ann
 
-checkOp :: (HasSrcSpan a)
-        => Op -> Ty -> Ty -> a -> m Ty
+checkOp :: CheckConstraints m a -- (HasSrcSpan a)
+        => Op -> Ty -> Ty -> a
+        -> m Ty
 checkOp op tl tr a
+  | tl /= tr
+  = emitError a (TypeMismatch tl tr)
   | isArith
-  = if IntTy == tl && IntTy == tr
-    then pure IntTy
-    else emitError a (TypeMismatch IntTy)
-  | isComp =  undefined
+  = checks [tl, tr] IntTy
+
+  | isComp = undefined
   | isEq = undefined
   where
+    checks expect = (expect <$) . traverse (\x -> checkTy a x expect)
+
     isArith = any (op ==) [Plus, Minus, Times, Divide]
     isComp  = any (op ==) [Lt, Le, Gt, Ge]
     isEq    = any (op ==) [Eq, Neq]
 
-checkTy :: Ty -> Ty -> m ()
-checkTy expect declared = undefined
-
+checkTy :: HasSrcSpan a => a -> Ty -> Ty -> m ()
+checkTy expect declared
+  | expect == declared = pure ()
+  | otherwise = fatal ann (TypeMismatch expect declared)
 
 transExp :: (HasSrcSpan a, MonadWriter MultipleErrors m)
-         => VEnv -> TEnv
-         -> Exp a -> m (Exp (Ty, a))
-transExp venv tenv exp = case exp of
-  Var v _
-    -> transVar venv tenv v
+         => VEnv -> TEnv -> Int
+         -> Exp a
+         -> m (Exp (Ty, a))
+transExp venv tenv loopLevel exp =
+  let
+    go = transExp venv tenv loopLevel
 
-  Nil _
-    -> annotTy NilTy exp
+    -- checkFieldTy fe fty = do
+    --   fe' <- go fe
+    --   ty <- getTy fe'
+    --   guard $ ty == fty
+    --   return fe'
 
-  Int _
-    -> annotTy IntTy exp
+  in case exp of
+    Var v ann
+      -> do v' <- transVar venv tenv v
+            pure $ Var v' (getTy v', ann)
 
-  String s
-    -> annotTy StringTy exp
+    Nil _
+      -> annotTy NilTy exp
 
-  Call funTy args a
-    -> undefined --case Symtab.lookup venv
+    Int _
+      -> annotTy IntTy exp
 
-  Op l o r _ -> do
-    <- transExp
-    tl <- getTy l
-    tr <- getTy r
-    to <- checkOp o tl tr
-    annotTy to exp
+    String s _
+      -> annotTy StringTy exp
 
-  Record fields recTy _
-    -> lookupT recTy >>= \case
-         Just actualRecTy@(RecordTy fieldTys uid)
-           | length fields == length fieldTys ->
-               do { zipWithM checkTy fields fieldTys
-                  ; annotTy actualRecTy exp
-                  }
-         Just _ -> throwError TypeMismatch
-         Nothing -> throwError TypeUndefined
+    Call fun args a ->
+      do <- lookupV venv fun
 
-  Seq seqs
-    | null seqs
-      -> annotTy UnitTy exp
-    | otherwise
-      -> mapM goTE seqs >>= flip annotTy exp . last
+    Op l o r ann -> do
+      l' <- go l
+      r' <- go r
+      to <- checkOp o (getTy l') (getTy r')
+      return $ Op l' o r' (to, ann)
 
-  Assign v e _
-    -> undefined
+-- FIXME
+    Record fields recTy _
+      -> lookupT recTy >>= \case
+           Just actualRecTy@(RecordTy fieldTys uid)
+             | length fields == length fieldTys ->
+                 do { zipWithM checkTy fields fieldTys
+                    ; annotTy actualRecTy exp
+                    }
+           Just _ -> throwError TypeMismatch
+           Nothing -> throwError TypeUndefined
 
-  If c t me _
-    -> undefined
+    Seq seqs ann
+      | null seqs ->
+          annotTy UnitTy exp
+      | otherwise ->
+        do seqs' <- mapM go seqs
+           return $ Seq seqs' (getTy (last seqs), ann)
 
-  While ce be _
-    -> undefined
+    Assign v e ann ->
+      do v' <- transVar venv tenv v
+         e' <- go e
+         let vTy = getTy v'
+         when (vTy /= NilTy) $ -- FIXME probably need to update venv
+           checkTy vTy (getTy e')
+         return $ Assign v' e' (UnitTy, ann)
 
-  For s b e1 e2 e3 _
-    -> undefined
+    If c t mf ann ->
+      do c' <- go c
+         checkTy (getTy c') IntTy
+         t' <- go t'
+         case mf of
+           Nothing ->
+             do checkTy (getTy t') UnitTy
+                return If c' t' Nothing (UnitTy, ann)
 
-  Break a
-    -> undefined
+           Just f ->
+             do f' <- go f
+                checkTy (getTy t') (getTy f')
+                return $ If c' t' f' (getTy t', ann)
 
-  Let binds e _
-  -- this only handles the nonrecursive binding case
-    -> do (venv', tenv') <- foldM (uncurry transDec) (venv,tenv) binds
-          ty <- transExp venv' tenv' e
-          annotTy ty exp
+    While c b ann ->
+      do c' <- go c
+         checkTy (getTy c') IntTy
+         b' <- transExp venv tenv (loopLevel+1) b
+         checkTy (getTy b') UnitTy
+         return $ While c' b' (UnitTy, ann)
 
-  Array arrTy sizeE initE _
-    -> case Symtab.lookup tenv arrTy of
-         Just actualArrTy@(ArrayTy initTy _ _) -> do
-           checkExpTy sizeE IntTy
-           checkExpTy initE initTy
-           annotTy actualArrTy exp
-         Just _ -> throwError TypeMismatch
-         Nothing -> throwError TypeUndefined
-  where
-    goTE = transExp venv tenv
-    checkFieldTy fe fty = do
-      fe' <- goTE fe
-      ty <- getTy fe'
-      guard $ ty == fty
-      return fe'
+    For i lo hi b ann ->
+      do lo' <- go lo
+         checkTy (getTy lo') IntTy
+         hi' <- go hi
+         checkTy (getTy hi') IntTy
+         b' <- transExp (Symtab.insert i (VarEntry IntTy) venv) tenv (loopLevel+1)
+         checkTy (getTy b') UnitTy
+         return $ For i lo' hi' b' (UnitTy, ann)
+
+    Break ann ->
+      do when (loopLevel < 1) $
+           nonfatal ann BreakOutsideLoop
+         pure $ Break (UnitTy, ann)
+
+    Let binds e _
+      -> do (venv', tenv') <- foldM (uncurry transDec) (venv,tenv) binds
+            ty <- transExp venv' tenv' e
+            annotTy (getTy ty) exp
+
+    Array arrTySymb sizeE initE ann
+      -> case Symtab.lookup tenv arrTySymb of
+           Just ty@(ArrayTy elemTy _) -> do
+             sizeE' <- go sizeE
+             checkTy (getTy sizeE') IntTy
+             initE' <- go initE
+             checkTy (getTy initE') elemTy
+             return $ Array arrTySymb sizeE' initE' (ty, ann)
+
+           Just ty -> fatal ann (TypeMismatch arrTySymb (Left ArrayTyC) ty)
+           Nothing -> nonfatal ann (TypeUndefined arrTySymb) -- if nonfatal,
+                      -- should probably add this type into env and continue...
 
 transDec :: CheckConstraints m a
          => VEnv -> TEnv
@@ -255,14 +314,12 @@ transDec venv tenv dec = case dec of
        let venv' = Symtab.insert name varTy venv
        return (venv', tenv)
 
-  TypeDecl ds a ->
-    do tenv' <- foldM (\te (s, ast_t,_) -> do
-                          ty <- transTy te ast_t
-                          pure $ Symtab.insert s ty te
-                      ) tenv ds
+  TypeDecl [(s, ast_t,_)] a ->
+    do ty <- transTy tenv ast_t
+       let tenv' = Symtab.insert s ty tenv
        return (venv, tenv')
 
-transTy :: (MonadWriter MultipleErrors m)
+transTy :: (Gensym m, MonadWriter MultipleErrors m)
         => TEnv
         -> AST.Ty a -> m Ty
 transTy tenv ty = case ty of
@@ -272,5 +329,3 @@ transTy tenv ty = case ty of
      -> undefined
   ArrayTy symv uniq _
      -> undefined
-
-  baseTy -> return baseTy

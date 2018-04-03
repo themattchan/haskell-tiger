@@ -43,6 +43,7 @@ library
                      , hashable
                      , transformers
                      , mtl
+                     , tardis
                      , lens
                      , profunctors
                      , contravariant

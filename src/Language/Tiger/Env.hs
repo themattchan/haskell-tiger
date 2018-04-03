@@ -14,7 +14,7 @@ data EnvEntry
   | FunEntry
       { -- level :: Translate.Level
       -- , label :: Temp.Label
-       formals :: [Ty]
+        formals :: [Ty]
       , result :: Ty
       }
 

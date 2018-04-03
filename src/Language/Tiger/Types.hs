@@ -1,22 +1,30 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Types in the Tiger language.
--- For convenience, this reuses the type machinery from Language.Tiger.AST.
--- Translation from AST.Ty to Types.Ty is done in Semant.transTy
 module Language.Tiger.Types
   ( Ty(..)
---  , AST.Ty(..)
-  , AST.Field(..)
-  , AST.Unique
-  , AST.Symbol(..)
   ) where
 
-import qualified Language.Tiger.AST as AST
+import Language.Tiger.AST (Symbol)
+
+type Unique = Int
 
 data Ty
-  = StringTy
+  = NilTy
   | UnitTy
   | IntTy
-  | NilTy
-  | TyTy (AST.Ty ())
-  deriving Eq
+  | StringTy
+  -- ^ base types
+  | NameTy Symbol Symbol -- (Maybe Symbol)
+  | RecordTy [(Symbol, Ty)] Unique
+  | Array Ty Unique
+  -- ^ user defined types
+  deriving (Show, Eq)
+
+data TyC = NameTyC | RecordTyC | ArrayTyC
+  deriving (Eq)
+
+instance Show TyC where
+  show NameTyC = "Name"
+  show RecordTyC = "Record"
+  show ArrayTyC = "Array"
