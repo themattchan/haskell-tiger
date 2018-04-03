@@ -28,7 +28,7 @@ import qualified Language.Tiger.Symtab as Symtab
 
 data TransError
   = TypeMismatch Ty Ty
-  | TypeUndefined Ty
+  | TypeUndefined Symbol
   | NoHOF
   | UnboundVariable Symbol
   | NoSuchField Symbol Symbol Ty
@@ -81,8 +81,9 @@ runCheckM = fmap fst
 lookupV :: (MonadReader (VEnv,TEnv) m) => Symbol -> m (Maybe EnvEntry)
 lookupV n = Symtab.lookup n <$> asks fst
 
-lookupT :: (MonadReader (VEnv,TEnv) m) => Symbol -> m (Maybe Ty)
-lookupT t = Symtab.lookup t <$> asks snd
+lookupT :: (HasSrcSpan a, MonadWriter MultipleErrors m)
+        => TEnv -> Symbol -> a -> m (Maybe Ty)
+lookupT env t a = maybe (emitError a (TypeUndefined t)) pure $ Symtab.lookup t env
 
 transProg :: CheckConstraints m a
           -> Exp a -> m ()
@@ -94,8 +95,8 @@ transProg e = do
     else pure ()
 
 transVar :: CheckConstraints m a
---         => Symtab.Symtab Env.EnvEntry -> Symtab.Symtab Ty
-         => Var a -> m (Exp (Ty, a))
+         => VEnv -> TEnv
+         -> Var a -> m (Exp (Ty, a))
 transVar venv tenv = \case
   SimpleVar varName a
     -> Symtab.lookupV varName >>= \case
@@ -137,8 +138,12 @@ checkOp op tl tr a
     isComp  = any (op ==) [Lt, Le, Gt, Ge]
     isEq    = any (op ==) [Eq, Neq]
 
+checkTy :: Ty -> Ty -> m ()
+checkTy expect declared = undefined
+
+
 transExp :: (HasSrcSpan a, MonadWriter MultipleErrors m)
-         => Symtab.Symtab Env.EnvEntry -> Symtab.Symtab Ty
+         => VEnv -> TEnv
          -> Exp a -> m (Exp (Ty, a))
 transExp venv tenv exp = case exp of
   Var v _
@@ -153,7 +158,7 @@ transExp venv tenv exp = case exp of
   String s
     -> annotTy StringTy exp
 
-  Call funTy args _
+  Call funTy args a
     -> undefined --case Symtab.lookup venv
 
   Op l o r _ -> do
@@ -191,10 +196,11 @@ transExp venv tenv exp = case exp of
   For s b e1 e2 e3 _
     -> undefined
 
-  Break _
+  Break a
     -> undefined
 
   Let binds e _
+  -- this only handles the nonrecursive binding case
     -> do (venv', tenv') <- foldM (uncurry transDec) (venv,tenv) binds
           ty <- transExp venv' tenv' e
           annotTy ty exp
@@ -202,8 +208,8 @@ transExp venv tenv exp = case exp of
   Array arrTy sizeE initE _
     -> case Symtab.lookup tenv arrTy of
          Just actualArrTy@(ArrayTy initTy _ _) -> do
-           checkTy sizeE IntTy
-           checkTy initE initTy
+           checkExpTy sizeE IntTy
+           checkExpTy initE initTy
            annotTy actualArrTy exp
          Just _ -> throwError TypeMismatch
          Nothing -> throwError TypeUndefined
@@ -215,24 +221,49 @@ transExp venv tenv exp = case exp of
       guard $ ty == fty
       return fe'
 
-transDec :: (HasSrcSpan a, MonadWriter MultipleErrors m)
-         => Symtab.Symtab Env.EnvEntry -> Symtab.Symtab Ty
-         -> Dec a
-         -> m (Symtab.Symtab Env.Env, Symtab.Symtab Ty)
+transDec :: CheckConstraints m a
+         => VEnv -> TEnv
+         => Dec a
+         -> m (VEnv, TEnv)
 transDec venv tenv dec = case dec of
-  FunctionDecl fs
-     -> foldM (uncurry goFun) (venv,tenv) fs
-  VarDecl{..}
-     -> undefined
-  TypeDecl ds
-     -> undefined
-  where
-    goFun venv tenv Function{..} = undefined
---      case Symtab.lookup funName venv of
+  FunctionDecl fs a ->
+    let doFun venv tenv Function{..} =
+          do formals <- for funParams $ \Field{..} ->
+               do ty <- lookupT tenv fieldType fieldAnnot
+                  -- TODO throw error if type not defined...
+                  pure (fieldName, VarEntry ty)
 
+             retTy <- maybe (pure UnitTy) (uncurry (lookupT tenv)) funResult
+
+             let formalTys = map snd formals
+             let funTy = FunEntry formalTys retTy
+             let venv' = Symtab.inserts ((funName, funTy):formals) venv
+
+             _ <- transExp venv' tenv' funBody
+
+             return (venv', tenv)
+    in
+      foldM (uncurry doFun) (venv, tenv) fs
+
+  VarDecl{name, typ, init, meta} ->
+    do init' <- transExp venv tenv init
+       let initTy = getTy init'
+       declaredTy <- traverse (uncurry (lookupT tenv)) typ
+       varTy <- case declaredTy of
+         Nothing -> pure initTy
+         Just ty -> do checkTy initTy ty; pure ty
+       let venv' = Symtab.insert name varTy venv
+       return (venv', tenv)
+
+  TypeDecl ds a ->
+    do tenv' <- foldM (\te (s, ast_t,_) -> do
+                          ty <- transTy te ast_t
+                          pure $ Symtab.insert s ty te
+                      ) tenv ds
+       return (venv, tenv')
 
 transTy :: (MonadWriter MultipleErrors m)
-        => Symtab.Symtab Ty
+        => TEnv
         -> AST.Ty a -> m Ty
 transTy tenv ty = case ty of
   NameTy symb maybeTy _

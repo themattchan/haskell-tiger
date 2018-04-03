@@ -103,14 +103,21 @@ decs :: { [Decl L] }
 
 dec :: { Decl L }
   : vardec  { $1 }
-  | fundec  { FunctionDecl [$1] (sp $1) }
-  | tydec   { TypeDecl     [$1] ((\(_,_,x) -> x) $1) }
+  | fundecs  { FunctionDecl $1 (foldMap sp $1) }
+  | tydecs   { TypeDecl     $1 (foldMap (\(_,_,x) -> x) $1) }
 
 vardec :: { Decl L }
   : 'var' ID ':=' exp
      { VarDecl (sym $2) True Nothing      $4 (spr $1 $4) }
   | 'var' ID ':' ID ':=' exp
      { VarDecl (sym $2) True (Just (sym $4, sp $4)) $6 (spr $1 $6) }
+
+fundecs :: { [Function L] }
+  : fundec fundecs { $1 : $2 }
+
+fundecs1 :: { [Function L] }
+  : {- nil -} { [] }
+  | fundec fundecs1 { $1 : $2 }
 
 fundec :: { Function L }
   : 'function' ID '(' tyfields ')' '=' exp
@@ -120,14 +127,21 @@ fundec :: { Function L }
 
 tyfields :: { [Field L] }
   : {- nil -} { [] }
-  | tyfield1 tyfieldss { $1 : $2 }
+  | tyfield tyfields1 { $1 : $2 }
 
-tyfield1 :: { Field L }
+tyfield :: { Field L }
   : ID ':' ID { Field (sym $1) (sym $3) (spr $1 $3) }
 
-tyfieldss :: { [Field L] }
+tyfields1 :: { [Field L] }
   : {- nil -} { [] }
-  | ',' tyfield1 tyfieldss { $2 : $3 }
+  | ',' tyfield tyfields1 { $2 : $3 }
+
+tydecs :: { [(Symbol, Ty L, L)] }
+  : tydec tydecs1 { $1 : $2 }
+
+tydecs1 :: { [(Symbol, Ty L, L)] }
+  : {- nil -} { [] }
+  | tydec tydecs1 { $1 : $2 }
 
 tydec :: { (Symbol, Ty L, L) }
   : 'type' ID '=' ty { (sym $2, $4, (spr $1 $4)) }
@@ -183,8 +197,8 @@ mathexp :: { Exp L }
   | exp '/'  exp              { Op $1 Divide $3  (spr $1 $3) }
 
 boolexp :: { Exp L }
-  : exp '&' exp               { Op $1 And    $3  (spr $1 $3) }
-  | exp '|' exp               { Op $1 Or     $3  (spr $1 $3) }
+  : exp '&' exp               { If $1 $3 (Int 0 mempty) (spr $1 $3) }
+  | exp '|' exp               { If $1 (Int 1 mempty) $3 (spr $1 $3) }
 
 assign :: { Exp L }
   : lvalue ':=' exp { Assign $1 $3 (spr $1 $3) }

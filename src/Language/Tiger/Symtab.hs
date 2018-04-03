@@ -23,6 +23,9 @@ empty = HM.empty
 insert :: Symbol -> a -> Symtab a -> Symtab a
 insert = HM.insert
 
+inserts :: Foldable t => t (Symbol, a) -> Symtab a -> Symtab a
+inserts = flip (foldr (uncurry insert))
+
 lookup :: Symbol -> Symtab a -> Maybe a
 lookup = HM.lookup
 

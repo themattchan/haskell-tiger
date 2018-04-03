@@ -31,7 +31,6 @@ data Op
   = Plus | Minus | Times | Divide
   | Eq | Neq
   | Lt | Le | Gt | Ge
-  | And | Or
   deriving (Show, Eq, Enum, Bounded)
 
 data Exp a
@@ -56,7 +55,7 @@ data Decl a
   = FunctionDecl [Function a] a
   | VarDecl { name   :: Symbol
             , escape :: Bool
-            , typ    :: Maybe (Symbol,a)
+            , typ    :: Maybe (Symbol, a)
             , init   :: Exp a
             , meta   :: a
             }
