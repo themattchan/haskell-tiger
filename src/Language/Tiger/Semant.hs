@@ -5,6 +5,7 @@
 module Language.Tiger.Semant where
 
 import Data.List
+import qualified Data.Sequence as Seq
 
 import Control.Applicative
 import Control.Monad
@@ -17,7 +18,6 @@ import Control.Monad.Writer.Class (MonadWriter(..))
 import Control.Monad.Writer.Lazy (WriterT(..))
 import Control.Monad.Tardis (TardisT(..))
 import Data.Functor.Identity
-import qualified Data.Sequence as Seq
 
 import Language.Tiger.AST hiding (Ty(..))
 import qualified Language.Tiger.AST as AST
@@ -28,7 +28,7 @@ import qualified Language.Tiger.Env as Env
 import qualified Language.Tiger.Symtab as Symtab
 
 --------------------------------------------------------------------------------
-transProg :: CheckConstraints m a
+transProg :: Semant m a
           -> Exp a -> m ()
 --------------------------------------------------------------------------------
 transProg e = do
@@ -39,7 +39,7 @@ transProg e = do
     else pure ()
 
 --------------------------------------------------------------------------------
-transVar :: CheckConstraints m a
+transVar :: Semant m a
          => VEnv -> TEnv
          -> Var a -> m (Var (Ty, a))
 --------------------------------------------------------------------------------
@@ -207,7 +207,7 @@ transExp venv tenv loopLevel exp =
                    -- should probably add this type into env and continue...
 
 --------------------------------------------------------------------------------
-transDec :: CheckConstraints m a
+transDec :: Semant m a
          => VEnv -> TEnv
          => Dec a
          -> m (VEnv, TEnv)
@@ -263,7 +263,13 @@ transTy tenv ty = case ty of
 --------------------------------------------------------------------------------
 -- * Errors
 
-data TransError
+newtype MultipleErrors = MultipleErrors
+  { runMultipleErrors :: Seq.Seq (Span SemantError) }
+
+instance Show MultipleErrors where
+  show = unlines . map show . Seq.toList . runMultipleErrors
+
+data SemantError
   = NamedTypeMismatch Symbol (Either TyC Ty) Ty
   | TypeMismatch Ty Ty
   | TypeUndefined Symbol
@@ -274,7 +280,7 @@ data TransError
   | NoSuchField Symbol Symbol Ty
   | BreakOutsideLoop
 
-instance Show TransError where
+instance Show SemantError where
   show = \case
     NamedTypeMismatch symb expect actual ->
       "Type mismatch: "
@@ -299,17 +305,14 @@ instance Show TransError where
     BreakOutsideLoop ->
       "break statement outside loop"
 
-newtype MultipleErrors = MultipleErrors
-  { runMultipleErrors :: Seq.Seq (Span TransError) }
-
 -- | log an error and keep going
 nonfatal :: (HasSrcSpan a, MonadWriter MultipleErrors m)
-         => a -> TransError -> m ()
+         => a -> SemantError -> m ()
 nonfatal = tell . Seq.singleton . Span . sp
 
 -- | log an error and halt
 fatal :: (HasSrcSpan a, MonadWriter MultipleErrors m, MonadError MultipleErrors m)
-      => a -> TransError -> m ()
+      => a -> SemantError -> m ()
 fatal ann err = do
   nonfatal ann err
   errs <- ask
@@ -324,25 +327,26 @@ type VEnv = Symtab.Symtab Env.EnvEntry
 -- | Typing environment
 type TEnv = Symtab.Symtab Ty
 
-type CheckConstraints m a =
+type Semant m a =
   ( HasSrcSpan a
   , MonadWriter MultipleErrors m
   , MonadError MultipleErrors m
   , MonadReader (VEnv, TEnv) m
   )
 
-type CheckM = (ExceptT MultipleErrors -- can probably get rid of this...
-               (WriterT MultipleErrors
-                 (ReaderT (VEnv, TEnv)
-                   Identity)))
+type SemantM = (ExceptT MultipleErrors -- can probably get rid of this...
+                 (WriterT MultipleErrors
+                   (ReaderT (VEnv, TEnv)
+                     Identity)))
 
-runCheckM :: CheckM a -> Either MultipleErrors a
-runCheckM = fmap fst
-          . runIdentity
-          . runReaderT (Symtab.venv0, Symtab.tenv0)
-          . runWriterT
-          . runExceptT
+runSemantM :: SemantM a -> Either MultipleErrors a
+runSemantM = fmap fst
+           . runIdentity
+           . runReaderT (Symtab.venv0, Symtab.tenv0)
+           . runWriterT
+           . runExceptT
 
+--------------------------------------------------------------------------------
 -- * Helpers
 
 lookupV :: (MonadReader (VEnv,TEnv) m) => Symbol -> m (Maybe EnvEntry)
@@ -355,7 +359,7 @@ lookupT env t a = maybe (emitError a (TypeUndefined t)) pure $ Symtab.lookup t e
 getTy :: Ann f => f (Ty, a) -> Ty
 getTy = fst . ann
 
-checkOp :: CheckConstraints m a -- (HasSrcSpan a)
+checkOp :: Semant m a -- (HasSrcSpan a)
         => Op -> Ty -> Ty -> a
         -> m Ty
 checkOp op tl tr a
