@@ -103,46 +103,46 @@ makeLenses ''Function
 -- * Annotations
 
 -- is this comonad??
-class Ann f where
-  ann :: f a -> a
+-- class Ann f where
+--   ann :: f a -> a
 
-instance Ann Var where
-  ann (SimpleVar _      a) = a
-  ann (FieldVar _ _     a) = a
-  ann (SubscriptVar _ _ a) = a
+instance Comonad Var where
+  extract (SimpleVar _      a) = a
+  extract (FieldVar _ _     a) = a
+  extract (SubscriptVar _ _ a) = a
 
-instance Ann Exp where
-  ann (Var _       a) = a
-  ann (Nil         a) = a
-  ann (Int _       a) = a
-  ann (String _    a) = a
-  ann (Call _ _    a) = a
-  ann (Op _ _ _    a) = a
-  ann (Record _ _  a) = a
-  ann (Seq _       a) = a
-  ann (Assign _ _  a) = a
-  ann (If _ _ _    a) = a
-  ann (While _ _   a) = a
-  ann (For _ _ _ _ a) = a
-  ann (Break       a) = a
-  ann (Let _ _     a) = a
-  ann (Array _ _ _ a) = a
+instance Comonad Exp where
+  extract (Var _       a) = a
+  extract (Nil         a) = a
+  extract (Int _       a) = a
+  extract (String _    a) = a
+  extract (Call _ _    a) = a
+  extract (Op _ _ _    a) = a
+  extract (Record _ _  a) = a
+  extract (Seq _       a) = a
+  extract (Assign _ _  a) = a
+  extract (If _ _ _    a) = a
+  extract (While _ _   a) = a
+  extract (For _ _ _ _ a) = a
+  extract (Break       a) = a
+  extract (Let _ _     a) = a
+  extract (Array _ _ _ a) = a
 
-instance Ann Decl where
-  ann (FunctionDecl _ a) = a
-  ann (VarDecl {meta=a}) = a
-  ann (TypeDecl _ a)     = a
+instance Comonad Decl where
+  extract (FunctionDecl _ a) = a
+  extract (VarDecl {meta=a}) = a
+  extract (TypeDecl _ a)     = a
 
-instance Ann Ty where
-  ann (NameTy _ a)   = a
-  ann (RecordTy _ a) = a
-  ann (ArrayTy _ a)  = a
+instance Comonad Ty where
+  extract (NameTy _ a)   = a
+  extract (RecordTy _ a) = a
+  extract (ArrayTy _ a)  = a
 
-instance Ann Field where
-  ann = fieldAnnot
+instance Comonad Field where
+  extract = fieldAnnot
 
-instance Ann Function where
-  ann = funAnnot
+instance Comonad Function where
+  extract = funAnnot
 
 class HasSrcSpan a where
   sp :: a -> SrcSpan
@@ -158,5 +158,5 @@ instance HasSrcSpan (Loc a) where
 
 -- instance (Ann f, HasSrcSpan a) => HasSrcSpan (f a) where
 --   sp = sp . ann
-instance (Ann f) => HasSrcSpan (f SrcSpan) where
-  sp = sp . ann
+instance (Comonad f) => HasSrcSpan (f SrcSpan) where
+  sp = sp . extract

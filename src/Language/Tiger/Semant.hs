@@ -89,14 +89,14 @@ transExp venv tenv loopLevel exp =
       do v' <- transVar venv tenv v
          pure $ Var v' (getTy v', ann)
 
-    Nil _ ->
-      annotTy NilTy exp
+    Nil ann ->
+      NilTy (NilTy, ann)
 
-    Int _ ->
-      annotTy IntTy exp
+    Int i ann ->
+      Int i (IntTy, ann)
 
-    String s _ ->
-      annotTy StringTy exp
+    String s ann ->
+      String s (StringTy, ann)
 
     Call fun args ann ->
       case Symtab.lookup venv fun of
@@ -145,7 +145,7 @@ transExp venv tenv loopLevel exp =
 
     Seq seqs ann
       | null seqs ->
-          annotTy UnitTy exp
+          Seq [] (UnitTy,ann)
       | otherwise ->
         do seqs' <- mapM go seqs
            return $ Seq seqs' (getTy (last seqs), ann)
@@ -188,10 +188,12 @@ transExp venv tenv loopLevel exp =
            nonfatal ann BreakOutsideLoop
          pure $ Break (UnitTy, ann)
 
-    Let binds e _ ->
+-- FIXME
+    Let binds e ann ->
       do (venv', tenv') <- foldM (uncurry transDec) (venv,tenv) binds
-         ty <- transExp venv' tenv' e
-         annotTy (getTy ty) exp
+         let binds' = undefined
+         e' <- transExp venv' tenv' e
+         return $ Let binds' e' (getTy e',ann)
 
     Array arrTySymb sizeE initE ann ->
       case Symtab.lookup tenv arrTySymb of
@@ -349,9 +351,6 @@ lookupV n = Symtab.lookup n <$> asks fst
 lookupT :: (HasSrcSpan a, MonadWriter MultipleErrors m)
         => TEnv -> Symbol -> a -> m (Maybe Ty)
 lookupT env t a = maybe (emitError a (TypeUndefined t)) pure $ Symtab.lookup t env
-
-annotTy :: Ty -> Exp a -> Exp (Ty, a)
-annotTy t e = (t, ) <$> e
 
 getTy :: Ann f => f (Ty, a) -> Ty
 getTy = fst . ann
