@@ -113,7 +113,7 @@ vardec :: { Decl L }
      { VarDecl (sym $2) True (Just (sym $4, sp $4)) $6 (spr $1 $6) }
 
 fundecs :: { [Function L] }
-  : fundec fundecs { $1 : $2 }
+  : fundec fundecs1 { $1 : $2 }
 
 fundecs1 :: { [Function L] }
   : {- nil -} { [] }
