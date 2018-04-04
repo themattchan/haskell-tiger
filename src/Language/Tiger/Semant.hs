@@ -27,6 +27,7 @@ import Language.Tiger.Types
 import Language.Tiger.Gensym
 import qualified Language.Tiger.Env as Env
 import qualified Language.Tiger.Symtab as Symtab
+import Language.Tiger.Utils
 
 --------------------------------------------------------------------------------
 transProg :: Semant m a
@@ -170,10 +171,9 @@ transExp venv tenv loopLevel exp =
            nonfatal ann BreakOutsideLoop
          pure $ Break (UnitTy, ann)
 
--- FIXME
     Let binds e ann ->
-      do (venv', tenv') <- foldM (uncurry transDec) (venv,tenv) binds
-         let binds' = undefined
+      do (binds', (venv', tenv')) <-
+           mapAccumLM (flip (uncurry transDec)) (venv,tenv) binds
          e' <- transExp venv' tenv' e
          return $ Let binds' e' (getTy e',ann)
 
@@ -218,7 +218,7 @@ transExp venv tenv loopLevel exp =
 transDec :: Semant m a
          => VEnv -> TEnv
          => Dec a
-         -> m (VEnv, TEnv)
+         -> m (Dec (Ty, a), (VEnv, TEnv))
 --------------------------------------------------------------------------------
 transDec venv tenv dec = case dec of
   FunctionDecl fs a ->
