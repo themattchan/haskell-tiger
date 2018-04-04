@@ -66,7 +66,7 @@ transVar venv tenv = \case
        case getTy arrVar' of
          Array elemTy _ ->
            do indexExp' <- transExp venv tenv 0 indexExp
-              checkTy (snd (ann indexExp')) (getTy indexExp') elemTy
+              checkTy (ann indexExp') elemTy
               return $ SubscriptVar arrVar' indexExp' (elemTy, a)
 
          otherTy -> fatal a (NamedTypeMismatch arrVar (Left ArrayTyC) otherTy)
@@ -83,8 +83,7 @@ transExp venv tenv loopLevel exp =
 
     goCheck e expectTy = do
       e' <- go e
-      let (ty, a) = ann e'
-      checkTy a ty expectTy
+      checkTy (ann e') expectTy
       return e'
 
     -- checkFieldTy fe fty = do
@@ -138,7 +137,7 @@ transExp venv tenv loopLevel exp =
          e' <- go e
          let vTy = getTy v'
          when (vTy /= NilTy) $ -- FIXME probably need to update venv
-           checkTy vTy (getTy e')
+           checkTy (ann v') (getTy e')
          return $ Assign v' e' (UnitTy, ann)
 
     If c t mf ann ->
@@ -146,7 +145,7 @@ transExp venv tenv loopLevel exp =
          t' <- go t'
          case mf of
            Nothing ->
-             do checkTy (getTy t') UnitTy
+             do checkTy (ann t') UnitTy
                 return $ If c' t' Nothing (UnitTy, ann)
 
            Just f ->
@@ -156,14 +155,14 @@ transExp venv tenv loopLevel exp =
     While c b ann ->
       do c' <- goCheck c IntTy
          b' <- transExp venv tenv (loopLevel+1) b
-         checkTy (snd (ann b')) (getTy b') UnitTy
+         checkTy (ann b') UnitTy
          return $ While c' b' (UnitTy, ann)
 
     For i lo hi b ann ->
       do lo' <- goCheck lo IntTy
          hi' <- goCheck hi IntTy
          b' <- transExp (Symtab.insert i (VarEntry IntTy) venv) tenv (loopLevel+1)
-         checkTy (snd (ann b')) (getTy b') UnitTy
+         checkTy (ann b') UnitTy
          return $ For i lo' hi' b' (UnitTy, ann)
 
     Break ann ->
@@ -188,7 +187,7 @@ transExp venv tenv loopLevel exp =
                           e' <- go recFldExp
                           let fldType = fromJust $ Symtab.lookup tenv fieldType
                            --  this should not fail
-                          checkTy recFldAnn (getTy e') fldType
+                          checkTy (ann e') fldType
                           return (recFldName, e', (getTy e', recFldAnn))
                  return $ Record fields' recTySymb (ty, ann)
 
@@ -246,7 +245,7 @@ transDec venv tenv dec = case dec of
        declaredTy <- traverse (uncurry (lookupT tenv)) typ
        varTy <- case declaredTy of
          Nothing -> pure initTy
-         Just ty -> do checkTy initTy ty; pure ty
+         Just ty -> do checkTy (ann init') ty; pure ty
        let venv' = Symtab.insert name varTy venv
        return (venv', tenv)
 
@@ -382,13 +381,13 @@ checkOp op tl tr a
   | isComp = undefined
   | isEq = undefined
   where
-    checks expect = (expect <$) . traverse (\x -> checkTy a x expect)
+    checks expect = (expect <$) . traverse (\x -> checkTy (x,a) expect)
 
     isArith = any (op ==) [Plus, Minus, Times, Divide]
     isComp  = any (op ==) [Lt, Le, Gt, Ge]
     isEq    = any (op ==) [Eq, Neq]
 
-checkTy :: HasSrcSpan a => a -> Ty -> Ty -> m ()
-checkTy ann expect declared
-  | expect == declared = pure ()
-  | otherwise = fatal ann (TypeMismatch expect declared)
+checkTy :: (Ty, SrcSpan) -> Ty -> m ()
+checkTy (actual, ss) declared
+  | actual == declared = pure ()
+  | otherwise = fatal ss (TypeMismatch actual declared)

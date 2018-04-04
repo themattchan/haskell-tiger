@@ -102,9 +102,10 @@ makeLenses ''Function
 
 -- * Annotations
 
--- is this comonad??
--- class Ann f where
---   ann :: f a -> a
+class Ann f where
+  ann :: f a -> a
+instance Comonad f => Ann f where
+  ann = extract
 
 instance Comonad Var where
   extract (SimpleVar _      a) = a
