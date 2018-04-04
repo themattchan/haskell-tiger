@@ -258,13 +258,13 @@ transTy :: (Gensym m, MonadWriter MultipleErrors m)
         => TEnv
         -> AST.Ty a -> m Ty
 --------------------------------------------------------------------------------
-transTy tenv ty = case ty of
+transTy tenv = \case
   AST.NameTy symb _
-    | symb == "nil" = return NilTy
-    | symb == "unit" = return UnitTy
-    | symb == "int" = return IntTy
-    | symb == "string" = return StringTy
-    | otherwise = undefined
+    | symb == "nil"    -> return NilTy
+    | symb == "unit"   -> return UnitTy
+    | symb == "int"    -> return IntTy
+    | symb == "string" -> return StringTy
+    | otherwise -> undefined
       -- do case Symtab.lookup tenv symb of
       --      undefined
 
