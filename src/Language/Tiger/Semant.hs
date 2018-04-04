@@ -42,16 +42,17 @@ transProg e = do
 
 --------------------------------------------------------------------------------
 transExp :: (HasSrcSpan a, MonadWriter MultipleErrors m)
-         => VEnv -> TEnv -> Int
+         => VEnv -> TEnv
+         -> Bool
          -> Exp a
          -> m (Exp (Ty, a))
 --------------------------------------------------------------------------------
-transExp venv tenv loopLevel exp =
+transExp venv tenv canBreak exp =
   let
-    go = transExp venv tenv loopLevel
+    go = transExp venv tenv
 
-    goCheck e expectTy = do
-      e' <- go e
+    goCheck cb e expectTy = do
+      e' <- go e cb
       checkTy (ann e') expectTy
       return e'
 
@@ -74,7 +75,7 @@ transExp venv tenv loopLevel exp =
         Just (FunEntry argsTy returnTy)
           | length args == length argsTy ->
             do args' <- for (zip args argsTy) $ \(argE, argTy) ->
-                 do argE' <- goCheck argE argTy
+                 do argE' <- goCheck False argE argTy
                     return argE'
                return $ Call fun args' (returnTy, ann)
           | otherwise ->
@@ -83,8 +84,8 @@ transExp venv tenv loopLevel exp =
         Nothing -> fatal ann (UndefinedFunction fun)
 
     Op l o r ann -> do
-      l' <- go l
-      r' <- go r
+      l' <- go False l
+      r' <- go False r
       to <- checkOp o (getTy l') (getTy r')
       return $ Op l' o r' (to, ann)
 
@@ -92,51 +93,55 @@ transExp venv tenv loopLevel exp =
       | null seqs ->
           Seq [] (UnitTy,ann)
       | otherwise ->
-        do seqs' <- mapM go seqs
+        do seqs' <- mapM (go canBreak) seqs
            return $ Seq seqs' (getTy (last seqs), ann)
 
     Assign v e ann ->
       do v' <- transVar venv tenv v
-         e' <- go e
+         e' <- go False e
          let vTy = getTy v'
          when (vTy /= NilTy) $ -- FIXME probably need to update venv
            checkTy (ann v') (getTy e')
          return $ Assign v' e' (UnitTy, ann)
 
     If c t mf ann ->
-      do c' <- goCheck c IntTy
-         t' <- go t'
+      do c' <- goCheck False c IntTy
+         t' <- go canBreak t'
          case mf of
            Nothing ->
              do checkTy (ann t') UnitTy
                 return $ If c' t' Nothing (UnitTy, ann)
 
            Just f ->
-             do f' <- goCheck f (getTy t')
+             do f' <- goCheck canBreak f (getTy t')
                 return $ If c' t' f' (getTy t', ann)
 
     While c b ann ->
-      do c' <- goCheck c IntTy
-         b' <- transExp venv tenv (loopLevel+1) b
+      do c' <- goCheck False c IntTy
+         b' <- transExp venv tenv True b
          checkTy (ann b') UnitTy
          return $ While c' b' (UnitTy, ann)
 
     For i lo hi b ann ->
-      do lo' <- goCheck lo IntTy
-         hi' <- goCheck hi IntTy
-         b' <- transExp (Symtab.insert i (VarEntry IntTy) venv) tenv (loopLevel+1)
+      do lo' <- goCheck False lo IntTy
+         hi' <- goCheck False hi IntTy
+         b' <- transExp (Symtab.insert i (VarEntry IntTy) venv) tenv True
          checkTy (ann b') UnitTy
          return $ For i lo' hi' b' (UnitTy, ann)
 
     Break ann ->
-      do when (loopLevel < 1) $
+      do unless canBreak $
            nonfatal ann BreakOutsideLoop
+           -- Break can only occur inside a loop body
+           -- PROVIDED that body is If (then and else branches), or Seq, or body
+           -- of let.
+
          pure $ Break (UnitTy, ann)
 
     Let binds e ann ->
       do (binds', (venv', tenv')) <-
            mapAccumLM (flip (uncurry transDec)) (venv,tenv) binds
-         e' <- transExp venv' tenv' e
+         e' <- transExp venv' tenv' canBreak e
          return $ Let binds' e' (getTy e',ann)
 
     Record fields recTySymb ann ->
@@ -147,7 +152,7 @@ transExp venv tenv loopLevel exp =
                     \((recFldName, recFldExp, recFldAnn),
                         Field{fieldName, fieldType, fieldAnnot}) ->
                        do recFldName == fieldName
-                          e' <- go recFldExp
+                          e' <- go False recFldExp
                           let fldType = fromJust $ Symtab.lookup tenv fieldType
                            --  this should not fail
                           checkTy (ann e') fldType
@@ -168,8 +173,8 @@ transExp venv tenv loopLevel exp =
     Array arrTySymb sizeE initE ann ->
       case Symtab.lookup tenv arrTySymb of
         Just ty@(ArrayTy elemTy _) -> do
-          sizeE' <- goCheck sizeE IntTy
-          initE' <- goCheck initE elemTy
+          sizeE' <- goCheck False sizeE IntTy
+          initE' <- goCheck False initE elemTy
           return $ Array arrTySymb sizeE' initE' (ty, ann)
 
         Just ty -> fatal ann (TypeMismatch arrTySymb (Left ArrayTyC) ty)
@@ -254,11 +259,17 @@ transTy :: (Gensym m, MonadWriter MultipleErrors m)
         -> AST.Ty a -> m Ty
 --------------------------------------------------------------------------------
 transTy tenv ty = case ty of
-  NameTy symb maybeTy _
+  NameTy symb _
+    | symb == "nil" = return NilTy
+    | symb == "unit" = return UnitTy
+    | symb == "int" = return IntTy
+    | symb == "string" = return StringTy
+    | otherwise =
+      do case Symtab.lookup tenv symb of
+
+  RecordTy fields _ ->
      -> undefined
-  RecordTy fields uniq
-     -> undefined
-  ArrayTy symv uniq _
+  ArrayTy symb _ ->
      -> undefined
 
 --------------------------------------------------------------------------------
