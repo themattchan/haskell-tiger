@@ -31,45 +31,14 @@ import Language.Tiger.Utils
 
 --------------------------------------------------------------------------------
 transProg :: Semant m a
-          -> Exp a -> m ()
+          -> Exp a -> m (Exp (Ty, a))
 --------------------------------------------------------------------------------
 transProg e = do
-  transExp e
+  e' <- transExp Env.venv0 Env.tenv0 0 e
   errs <- ask
   if not (Seq.null errs)
     then throwError errs
-    else pure ()
-
---------------------------------------------------------------------------------
-transVar :: Semant m a
-         => VEnv -> TEnv
-         -> Var a -> m (Var (Ty, a))
---------------------------------------------------------------------------------
-transVar venv tenv = \case
-  SimpleVar varName a ->
-    case Symtab.lookup venv varName of
-      Just (VarEntry{ty}) -> return $ SimpleVar varName (ty,a)
-      Just (FunEntry{}) -> nonfatal a NoHOF
-      Nothing -> nonfatal a (UnboundVariable varName)
-
-  FieldVar recVar fieldName a ->
-    do recVar' <- transVar venv tenv recVar
-       case getTy recVar' of
-         RecordTy fields _ ->
-           case List.lookup fieldName fields of
-             Just fieldTy -> return $ FieldVar recVar' fieldName (fieldTy, a)
-             Nothing -> nonfatal a (NoSuchField fieldName recVar (getTy recVar'))
-         otherTy -> fatal a (NamedTypeMismatch recVar (Left RecordTyC) otherTy)
-
-  SubscriptVar arrVar indexExp a ->
-    do arrVar' <- transVar venv tenv recVar
-       case getTy arrVar' of
-         Array elemTy _ ->
-           do indexExp' <- transExp venv tenv 0 indexExp
-              checkTy (ann indexExp') elemTy
-              return $ SubscriptVar arrVar' indexExp' (elemTy, a)
-
-         otherTy -> fatal a (NamedTypeMismatch arrVar (Left ArrayTyC) otherTy)
+    else pure e'
 
 --------------------------------------------------------------------------------
 transExp :: (HasSrcSpan a, MonadWriter MultipleErrors m)
@@ -85,12 +54,6 @@ transExp venv tenv loopLevel exp =
       e' <- go e
       checkTy (ann e') expectTy
       return e'
-
-    -- checkFieldTy fe fty = do
-    --   fe' <- go fe
-    --   ty <- getTy fe'
-    --   guard $ ty == fty
-    --   return fe'
 
   in case exp of
     Var v ann ->
@@ -255,6 +218,37 @@ transDec venv tenv dec = case dec of
        return (venv, tenv')
 
 --------------------------------------------------------------------------------
+transVar :: Semant m a
+         => VEnv -> TEnv
+         -> Var a -> m (Var (Ty, a))
+--------------------------------------------------------------------------------
+transVar venv tenv = \case
+  SimpleVar varName a ->
+    case Symtab.lookup venv varName of
+      Just (VarEntry{ty}) -> return $ SimpleVar varName (ty,a)
+      Just (FunEntry{}) -> nonfatal a NoHOF
+      Nothing -> nonfatal a (UnboundVariable varName)
+
+  FieldVar recVar fieldName a ->
+    do recVar' <- transVar venv tenv recVar
+       case getTy recVar' of
+         RecordTy fields _ ->
+           case List.lookup fieldName fields of
+             Just fieldTy -> return $ FieldVar recVar' fieldName (fieldTy, a)
+             Nothing -> nonfatal a (NoSuchField fieldName recVar (getTy recVar'))
+         otherTy -> fatal a (NamedTypeMismatch recVar (Left RecordTyC) otherTy)
+
+  SubscriptVar arrVar indexExp a ->
+    do arrVar' <- transVar venv tenv recVar
+       case getTy arrVar' of
+         Array elemTy _ ->
+           do indexExp' <- transExp venv tenv 0 indexExp
+              checkTy (ann indexExp') elemTy
+              return $ SubscriptVar arrVar' indexExp' (elemTy, a)
+
+         otherTy -> fatal a (NamedTypeMismatch arrVar (Left ArrayTyC) otherTy)
+
+--------------------------------------------------------------------------------
 transTy :: (Gensym m, MonadWriter MultipleErrors m)
         => TEnv
         -> AST.Ty a -> m Ty
@@ -387,6 +381,8 @@ checkOp op tl tr a
     isComp  = any (op ==) [Lt, Le, Gt, Ge]
     isEq    = any (op ==) [Eq, Neq]
 
+-- | Given an annotation from a Typed AST piece, check that the inferred type has
+-- the asserted type.
 checkTy :: (Ty, SrcSpan) -> Ty -> m ()
 checkTy (actual, ss) declared
   | actual == declared = pure ()
