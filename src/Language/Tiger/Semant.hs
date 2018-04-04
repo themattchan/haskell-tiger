@@ -7,6 +7,7 @@ module Language.Tiger.Semant where
 import Data.List
 import qualified Data.Sequence as Seq
 
+import Control.Arrow ((&&&))
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Class
@@ -271,7 +272,9 @@ transTy tenv = \case
   AST.RecordTy fields _ ->
     -- FIXME what about
     -- type myrec := { x: int, nest: myrec } ??
-    do flds <- traverse (sequence . (fieldName &&& lookupT tenv . fieldType)) fields
+    do flds <- traverse (\Field{..} ->
+                           sequence (fieldName, lookupT tenv fieldType fieldAnnot)
+                        ) fields
        uniq <- gensym
        return $ RecordTy flds uniq
 
