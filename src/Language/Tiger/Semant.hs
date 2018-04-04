@@ -18,6 +18,7 @@ import Control.Monad.Writer.Class (MonadWriter(..))
 import Control.Monad.Writer.Lazy (WriterT(..))
 import Control.Monad.Tardis (TardisT(..))
 import Data.Functor.Identity
+import qualified Data.List as List
 
 import Language.Tiger.AST hiding (Ty(..))
 import qualified Language.Tiger.AST as AST
@@ -45,22 +46,29 @@ transVar :: Semant m a
 --------------------------------------------------------------------------------
 transVar venv tenv = \case
   SimpleVar varName a ->
-    Symtab.lookupV varName >>= \case
-      Just (VarTy ty) -> pure (Var var (ty, a))
-      Just _ -> nonfatal a NoHOF
-         Nothing -> nonfatal a UnboundVariable
+    case Symtab.lookup venv varName of
+      Just (VarEntry{ty}) -> return $ SimpleVar varName (ty,a)
+      Just (FunEntry{}) -> nonfatal a NoHOF
+      Nothing -> nonfatal a (UnboundVariable varName)
 
   FieldVar recVar fieldName a ->
-    do Var _ (ty, _)  <- transVar venv tenv recVar
-       case ty of
-         RecordTy fields _ _ -> case lookup fieldName fields of
-           Just fieldTy -> undefined
-           Nothing -> nonfatal a NoSuchField
-         _ -> fatal a TypeUndefined
+    do recVar' <- transVar venv tenv recVar
+       case getTy recVar' of
+         RecordTy fields _ ->
+           case List.lookup fieldName fields of
+             Just fieldTy -> return $ FieldVar recVar' fieldName (fieldTy, a)
+             Nothing -> nonfatal a (NoSuchField fieldName recVar (getTy recVar'))
+         otherTy -> fatal a (NamedTypeMismatch recVar (Left RecordTyC) otherTy)
 
-  SubscriptVar var1 exp1 a ->
-    do Var _ (ty, _)  <- transVar venv tenv recVar
-        undefined
+  SubscriptVar arrVar indexExp a ->
+    do arrVar' <- transVar venv tenv recVar
+       case getTy arrVar' of
+         Array elemTy _ ->
+           do indexExp' <- transExp venv tenv 0 indexExp
+              checkTy (snd (ann indexExp')) (getTy indexExp') elemTy
+              return $ SubscriptVar arrVar' indexExp' (elemTy, a)
+
+         otherTy -> fatal a (NamedTypeMismatch arrVar (Left ArrayTyC) otherTy)
 
 --------------------------------------------------------------------------------
 transExp :: (HasSrcSpan a, MonadWriter MultipleErrors m)
@@ -117,32 +125,6 @@ transExp venv tenv loopLevel exp =
       to <- checkOp o (getTy l') (getTy r')
       return $ Op l' o r' (to, ann)
 
-    Record fields recTySymb ann ->
-      case Symtab.lookup tenv recTySymb of
-        Just ty@(RecordTy fieldTys _) ->
-          | length fields == length fieldTys ->
-              do fields' <- for (zip fields fieldTys) $
-                    \((recFldName, recFldExp, recFldAnn),
-                        Field{fieldName, fieldType, fieldAnnot}) ->
-                       do recFldName == fieldName
-                          e' <- go recFldExp
-                          let fldType = fromJust $ Symtab.lookup tenv fieldType
-                           --  this should not fail
-                          checkTy recFldAnn (getTy e') fldType
-                          return (recFldName, e', (getTy e', recFldAnn))
-                 return $ Record fields' recTySymb (ty, ann)
-
-          | otherwise ->
-             fatal ann $
-               TypeMismatch recTySymb
-                   (Right ty)
-                   (RecordTy (map (\(x,y,_) -> (x,y)) fields) 99999)
-
-        -- recTySymb is not a record
-        Just ty -> fatal ann (TypeMismatch recTySymb (Left RecordTyC) ty)
-
-        Nothing -> nonfatal ann (TypeUndefined recTySymb)
-
     Seq seqs ann
       | null seqs ->
           Seq [] (UnitTy,ann)
@@ -194,6 +176,32 @@ transExp venv tenv loopLevel exp =
          let binds' = undefined
          e' <- transExp venv' tenv' e
          return $ Let binds' e' (getTy e',ann)
+
+    Record fields recTySymb ann ->
+      case Symtab.lookup tenv recTySymb of
+        Just ty@(RecordTy fieldTys _) ->
+          | length fields == length fieldTys ->
+              do fields' <- for (zip fields fieldTys) $
+                    \((recFldName, recFldExp, recFldAnn),
+                        Field{fieldName, fieldType, fieldAnnot}) ->
+                       do recFldName == fieldName
+                          e' <- go recFldExp
+                          let fldType = fromJust $ Symtab.lookup tenv fieldType
+                           --  this should not fail
+                          checkTy recFldAnn (getTy e') fldType
+                          return (recFldName, e', (getTy e', recFldAnn))
+                 return $ Record fields' recTySymb (ty, ann)
+
+          | otherwise ->
+             fatal ann $
+               TypeMismatch recTySymb
+                   (Right ty)
+                   (RecordTy (map (\(x,y,_) -> (x,y)) fields) 99999)
+
+        -- recTySymb is not a record
+        Just ty -> fatal ann (TypeMismatch recTySymb (Left RecordTyC) ty)
+
+        Nothing -> nonfatal ann (TypeUndefined recTySymb)
 
     Array arrTySymb sizeE initE ann ->
       case Symtab.lookup tenv arrTySymb of
@@ -277,6 +285,7 @@ data SemantError
   | NoHOF
   | UndefinedFunction Symbol
   | UnboundVariable Symbol
+  | RepeatedDefinition Symbol
   | NoSuchField Symbol Symbol Ty
   | BreakOutsideLoop
 
@@ -300,6 +309,8 @@ instance Show SemantError where
       "Undefined function: " <> show fn
     UnboundVariable v ->
       "Unbound variable: " <> show v
+    RepeatedDefinition s ->
+      "Repeated definition of " <> show s
     NoSuchField fld r rt ->
       "No field named " <> show fld <> " in record " <> show r <> " of type " <> show rt
     BreakOutsideLoop ->
