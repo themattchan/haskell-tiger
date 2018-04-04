@@ -259,18 +259,24 @@ transTy :: (Gensym m, MonadWriter MultipleErrors m)
         -> AST.Ty a -> m Ty
 --------------------------------------------------------------------------------
 transTy tenv ty = case ty of
-  NameTy symb _
+  AST.NameTy symb _
     | symb == "nil" = return NilTy
     | symb == "unit" = return UnitTy
     | symb == "int" = return IntTy
     | symb == "string" = return StringTy
-    | otherwise =
-      do case Symtab.lookup tenv symb of
+    | otherwise = undefined
+      -- do case Symtab.lookup tenv symb of
+      --      undefined
 
-  RecordTy fields _ ->
-     -> undefined
-  ArrayTy symb _ ->
-     -> undefined
+  AST.RecordTy fields _ ->
+    -- FIXME what about
+    -- type myrec := { x: int, nest: myrec } ??
+    do flds <- traverse (sequence . (fieldName &&& lookupT tenv . fieldType)) fields
+       uniq <- gensym
+       return $ RecordTy flds uniq
+
+  AST.ArrayTy symb _ ->
+    Array <$> lookupT tenv symb <*> gensym
 
 --------------------------------------------------------------------------------
 -- * Errors
@@ -368,7 +374,7 @@ lookupV :: (MonadReader (VEnv,TEnv) m) => Symbol -> m (Maybe EnvEntry)
 lookupV n = Symtab.lookup n <$> asks fst
 
 lookupT :: (HasSrcSpan a, MonadWriter MultipleErrors m)
-        => TEnv -> Symbol -> a -> m (Maybe Ty)
+        => TEnv -> Symbol -> a -> m Ty
 lookupT env t a = maybe (emitError a (TypeUndefined t)) pure $ Symtab.lookup t env
 
 getTy :: Ann f => f (Ty, a) -> Ty
